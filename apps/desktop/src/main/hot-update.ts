@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { dirname, join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { checkZip, VerifyError, zipEntries, type ZipEntry } from './update-verify';
-import type { FetchFn } from './release-updater';
+import { fetchPinned, type FetchFn } from './release-updater';
 // Plain CommonJS shared with the boot loader (src/boot/boot.cjs): the state file and the shell rule.
 import * as pick from '../boot/pick.cjs';
 
@@ -180,13 +180,10 @@ export class HotUpdater {
   }
 
   private async get(base: string, name: string, max: number, timeoutMs: number): Promise<Buffer | null> {
-    const res = await this.o.fetch(`${base}/${name}`, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+    // Redirects followed, then the final URL held to GitHub's release hosts (or the base's own origin in a dev run).
+    const res = await fetchPinned(this.o.fetch, `${base}/${name}`, base, AbortSignal.timeout(timeoutMs));
     if (res.status === 404) return null;
     if (!res.ok) throw new HotError(`${name}: HTTP ${res.status}`);
-    // The redirect target must be GitHub's (or the configured base's own origin in a dev run).
-    const at = res.url ? new URL(res.url) : null;
-    const home = new URL(base).origin;
-    if (at && at.origin !== home && !(at.protocol === 'https:' && /(^|\.)(github\.com|githubusercontent\.com)$/.test(at.hostname))) throw new HotError(`redirect to ${at.host} refused`);
     if (Number(res.headers.get('content-length') ?? 0) > max) throw new HotError(`${name} too large`);
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > max) throw new HotError(`${name} too large`);

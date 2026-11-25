@@ -132,39 +132,24 @@ export function macZipName(version: string, arch: string): string | null {
 export type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
 /** A URL the updater may read from: https on `REDIRECT_HOSTS`, or the configured base's own origin (a test or dev server). */
-function allowed(u: URL, home: string): boolean {
+export function allowed(u: URL, home: string): boolean {
   return u.origin === home || (u.protocol === 'https:' && REDIRECT_HOSTS.has(u.hostname));
 }
 
 /**
- * GET with redirects followed by hand: each hop must pass `allowed`. A fetch that follows a redirect
- * itself, or answers a manual redirect opaquely (status 0, no Location), is checked on the URL it
- * ended at instead; the body is only read from an allowed URL either way.
+ * GET that follows redirects (Electron's `net.fetch` cancels a `manual` one) and then checks the
+ * URL it ended at: https on `REDIRECT_HOSTS`, or the base's own origin. Anything else is refused
+ * before the body is read.
  */
-async function fetchPinned(f: FetchFn, url: string, base: string, signal: AbortSignal): Promise<Response> {
+export async function fetchPinned(f: FetchFn, url: string, base: string, signal: AbortSignal): Promise<Response> {
   const home = new URL(base).origin;
-  let u = new URL(url);
-  for (let hop = 0; hop < 6; hop++) {
-    let res = await f(u.toString(), { redirect: 'manual', signal });
-    if (res.type === 'opaqueredirect' || res.status === 0) {
-      await res.body?.cancel().catch(() => undefined);
-      res = await f(u.toString(), { redirect: 'follow', signal });
-    }
-    if (res.url) {
-      const at = new URL(res.url);
-      if (!allowed(at, home)) {
-        await res.body?.cancel().catch(() => undefined);
-        throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${at.protocol}//${at.host} refused`);
-      }
-    }
-    const loc = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
-    if (!loc) return res;
+  const res = await f(url, { redirect: 'follow', signal });
+  const at = new URL(res.url || url);
+  if (!allowed(at, home)) {
     await res.body?.cancel().catch(() => undefined);
-    const next = new URL(loc, u);
-    if (!allowed(next, home)) throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${next.protocol}//${next.host} refused`);
-    u = next;
+    throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${at.protocol}//${at.host} refused`);
   }
-  throw new UpdateError('UPDATE_DOWNLOAD', 'too many redirects');
+  return res;
 }
 
 /** An error message fit for the log: any URL in it cut to its origin (no path, query or credentials). */
