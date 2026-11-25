@@ -17,6 +17,7 @@ import {
 import { tokenKind } from '../accounts/secrets';
 import { bearerToken, isAuthFailure, type Authenticator, type AuthFailure, type Principal } from '../auth';
 import { checkCsrf, parseCookies } from '../web/cookies';
+import type { ProjectAi } from '../agents/deepseek';
 import type { OfficeViewer } from '../office/onlyoffice';
 import type { RateLimiter } from './ratelimit';
 import type { ServerConfig } from '../server';
@@ -162,6 +163,8 @@ export interface ApiDeps {
    * too, rather than letting `agent.guide`/`/mcp` silently fall back to an empty guide.
    */
   skillMarkdown: string;
+  /** The project agent's model (`agent.ask`, `me.ai`); `buildApp` builds one from `cfg.ai`. Absent = rule-only. */
+  ai?: ProjectAi;
 }
 
 type AuthOf<K extends ApiName> = (typeof API_ROUTES)[K]['auth'];

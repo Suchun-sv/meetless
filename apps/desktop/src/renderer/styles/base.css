@@ -169,3 +169,26 @@ blockquote{margin:0;padding:var(--space-3) var(--space-4);border-radius:var(--ra
   .app.with-drawer{grid-template-columns:220px minmax(0,1fr) 380px}
   .three{grid-template-columns:240px minmax(0,1fr) 280px}
 }
+
+/* ---------- Phone (design 2026-11-25 §7): one breakpoint, tokens only; at 761px and wider nothing changes ---------- */
+@media (max-width: 760px){
+  .app,.app.with-drawer{grid-template-columns:minmax(0,1fr)}
+  .page{padding:var(--space-4) var(--space-4) var(--space-8)}
+  /* Three panes stack and the page scrolls as one */
+  .scroll.v-inputs,.scroll.v-artifacts{overflow:auto}
+  .withc{height:auto;min-height:100%}
+  .withc-b{flex:none}
+  .three{display:flex;flex-direction:column;height:auto}
+  .pane-l,.pane-r{overflow:visible;border:0;padding:var(--space-3) var(--space-4)}
+  .pane-l{max-height:40vh;overflow:auto;border-bottom:var(--border)}
+  .pane-r{border-top:var(--border)}
+  .pane-c{overflow:visible;padding:var(--space-4)}
+  /* Touch targets; 17px fields so a focus does not zoom the page */
+  .btn,.chip,.inp,.seg button,.li{min-height:var(--touch-min)}
+  .x{min-width:var(--touch-min);min-height:var(--touch-min)}
+  .inp{font-size:var(--text-lg)}
+  .nc-t{max-width:60vw}
+  /* Modals become bottom sheets */
+  .scrim{align-items:flex-end;padding-top:0}
+  .modal,.modal.wide{width:100%;max-height:var(--layout-sheet);border-bottom:0;border-radius:var(--radius-xl) var(--radius-xl) 0 0;padding:var(--space-5) var(--space-4) calc(var(--space-5) + var(--safe-bottom))}
+}

@@ -11,12 +11,28 @@ import { useThrowNotice, withBusy } from './busy';
 import { SHARE_IDLE, shareClick, shareView, type ShareState } from './share';
 import './needs.css';
 
-/** The close `×`, shared by the full drawer and the "not available" placeholder. */
+/** The close `×`, shared by the full drawer and the "not available" placeholder. Hidden under 760px, where `BackButton` takes its place. */
 function CloseButton() {
   const { t, closeNeed } = useApp();
   return (
-    <button type="button" className="x" aria-label={t('close')} title={t('close')} onClick={closeNeed}>
+    <button type="button" className="x dr-x" aria-label={t('close')} title={t('close')} onClick={closeNeed}>
       {'×'}
+    </button>
+  );
+}
+
+/**
+ * `drawer-back`: under 760px the drawer is a full-screen page (design 2026-11-25 §7) and this
+ * button, at the start of its header, closes it back to the page underneath. Hidden above 760px.
+ */
+export function BackButton() {
+  const { t, closeNeed } = useApp();
+  return (
+    <button type="button" className="btn btn-ghost drawer-back" data-testid="drawer-back" onClick={closeNeed}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      {t('web.back')}
     </button>
   );
 }
@@ -86,6 +102,7 @@ function Header({ projectId, need, busy, setBusy }: { projectId: Id; need: Need;
 
   return (
     <div className="dr-h">
+      <BackButton />
       <div className="row gap6">
         <span className="mono faint">{need.code}</span>
         <span className="faint small">{t(`kind.${need.kind}` as MessageKey)}</span>
@@ -165,6 +182,7 @@ export function NeedDrawer({ projectId, needId }: { projectId: Id; needId: Id })
     return (
       <aside className="drawer" data-testid="drawer" data-need={needId}>
         <div className="dr-h">
+          <BackButton />
           <div className="row gap6">
             <span className="faint">{t('dr.missing')}</span>
             <span className="grow" />

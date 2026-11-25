@@ -38,10 +38,18 @@ export function Reply({ reply, scope, messageId }: ReplyProps) {
       // Skipped the same way need cites not in `live.needs` are: a material whose input or artifact
       // has gone private to someone else, or been deleted, is never shown (contract §12.21).
       const materials = a.materials.filter((m) => (m.kind === 'input' ? live.inputs[m.id] : live.artifacts[m.id]));
+      const gen = a.text !== undefined;
       return (
         <>
-          <div>{t('ans.found')}</div>
-          {groups.map((g) => {
+          {gen ? <div className="rp-gen">{a.text}</div> : <div>{t('ans.found')}</div>}
+          {gen && groups.length > 0 && (
+            <div className="row gap6 wrap">
+              {groups.map((g) => (
+                <NeedChip key={g.needId} projectId={live.needs[g.needId]!.projectId} needId={g.needId} />
+              ))}
+            </div>
+          )}
+          {!gen && groups.map((g) => {
             const n = live.needs[g.needId]!;
             return (
               <div key={g.needId} className="rp-group">

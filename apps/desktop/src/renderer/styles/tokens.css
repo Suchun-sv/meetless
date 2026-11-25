@@ -85,6 +85,13 @@
   --layout-drawer: 420px;
   --layout-topbar: 56px;
   --layout-content: 768px;
+  /* layout: phone (design 2026-11-25 §7, under @media (max-width: 760px)) */
+  --layout-nav: min(300px, 86vw);
+  --layout-sheet: 88vh;
+  --touch-min: 44px;
+  --kb-inset: 0px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   /* motion */
   --duration-fast: 120ms;
   --duration-normal: 180ms;

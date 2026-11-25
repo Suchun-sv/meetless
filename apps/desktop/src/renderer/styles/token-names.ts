@@ -86,6 +86,13 @@ export const TOKEN_NAMES = [
   '--layout-drawer',
   '--layout-topbar',
   '--layout-content',
+  // layout: phone (`--kb-inset` is set on the root by ui/viewport.ts while the on-screen keyboard is up)
+  '--layout-nav',
+  '--layout-sheet',
+  '--touch-min',
+  '--kb-inset',
+  '--safe-top',
+  '--safe-bottom',
   // motion
   '--duration-fast',
   '--duration-normal',

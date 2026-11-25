@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROJECT_CARDS, DOT_RE, needByCode, type Id, type Suggestion } from '@meetless/core';
+import { DEFAULT_PROJECT_CARDS, DOT_RE, needByCode, type AgentReply, type Id, type Suggestion } from '@meetless/core';
 import { createTranslator } from '@meetless/i18n';
 import {
   acceptsFile,
   agentScope,
+  askCommands,
   chipLabel,
   chipOutcome,
   chipsFor,
@@ -16,6 +17,7 @@ import {
   onDashboardFor,
   recordSentPriv,
   recordSentPrivFor,
+  replyLabel,
   sendCommands,
   setPriv,
   shouldSend,
@@ -62,6 +64,41 @@ describe('sendCommands', () => {
     expect(cmds.map((c) => c.type)).toEqual(['chat.asked', 'dashboard.set']);
     expect((cmds[1]!.payload as { cards: unknown }).cards).toEqual([...DEFAULT_PROJECT_CARDS, 'sources']);
     expect((cmds[1]!.payload as { refreshed: Record<string, string> }).refreshed.sources).toBe(now);
+  });
+});
+
+describe('askCommands (AI on)', () => {
+  const replyOf = (cmds: { payload: unknown }[]) => (cmds[0]!.payload as { reply: AgentReply }).reply;
+
+  it('a free question goes to agent.ask and records its reply', async () => {
+    const gen: AgentReply = { answer: { intent: 'retrieval', needs: [], materials: [], cites: [], text: '项目记录里没有这项信息。' }, provider: 'deepseek/deepseek-chat', simulated: false, source: 'deepseek' };
+    const asked: unknown[] = [];
+    const cmds = await askCommands(s, 'u-alex', 'sample-atlas', 'N2 为什么改了', today, now, 'm-ai1', async (req) => {
+      asked.push(req);
+      return { ok: true, data: { reply: gen } };
+    });
+    expect(asked).toEqual([{ projectId: 'sample-atlas', question: 'N2 为什么改了' }]);
+    expect(replyOf(cmds)).toEqual(gen);
+    expect(replyLabel(gen)).toEqual({ generated: true, note: 'ch.genNote' });
+  });
+
+  it('with the server out of reach the local rule answer is used, marked offline', async () => {
+    const cmds = await askCommands(s, 'u-alex', 'sample-atlas', 'N2 为什么改了', today, now, 'm-ai2', async () => ({ ok: false, code: 'NETWORK' }));
+    const r = replyOf(cmds);
+    expect(r).toMatchObject({ provider: 'rules/1', simulated: true, source: 'rules', fallback: 'offline', answer: { intent: 'retrieval' } });
+    expect(replyLabel(r)).toEqual({ generated: false, note: 'ch.fellBack' });
+    const thrown = await askCommands(s, 'u-alex', 'sample-atlas', 'N2 为什么改了', today, now, 'm-ai3', () => Promise.reject(new Error('down')));
+    expect(replyOf(thrown).fallback).toBe('offline');
+  });
+
+  it('intents stay local and never call the server', async () => {
+    let calls = 0;
+    const cmds = await askCommands(s, 'u-alex', 'sample-atlas', '加一张需求来源卡片', today, now, 'm-ai4', async () => {
+      calls++;
+      return { ok: false, code: 'NETWORK' };
+    });
+    expect(calls).toBe(0);
+    expect(cmds.map((c) => c.type)).toEqual(['chat.asked', 'dashboard.set']);
   });
 });
 

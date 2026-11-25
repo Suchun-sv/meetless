@@ -87,3 +87,22 @@
   .home-grid,.dash-grid{grid-template-columns:minmax(0,1fr)}
   .wg.wide{grid-column:auto}
 }
+
+/* Phone (design 2026-11-25 §7): one column of cards, tighter page edges, card actions always shown. */
+@media (max-width: 760px){
+  .home{padding:var(--space-6) var(--space-4) var(--space-8)}
+  .home-hero h1,.home-hero2 h1{font-size:var(--text-xl)}
+  .home-hero2{padding:var(--space-2) 0 var(--space-1)}
+  .dash{padding:var(--space-4) var(--space-4) 0}
+  .dash > .composer-wrap{margin:0 calc(var(--space-4) * -1)}
+  .pj,.mb{grid-template-columns:minmax(0,1fr)}
+  .hy-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wg{padding:var(--space-3)}
+  .wg-h{flex-wrap:wrap;row-gap:0}
+  .wg-h h3,.wg-act{white-space:nowrap}
+  .wg-meta{order:1;flex-basis:100%}
+  .wg-act{opacity:1}
+  .hrow,.rk-i,.hbtn{min-height:var(--touch-min)}
+  .src-n{width:40%}
+  .act-d{width:auto}
+}

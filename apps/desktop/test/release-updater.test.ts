@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { UpdateState } from '@meetless/client/bridge';
-import { installKind, macZipName, manifestName, newer, parseManifest, ReleaseUpdater, swapBundle, type ReleaseUpdaterOptions } from '../src/main/release-updater';
+import { installKind, macZipName, manifestName, newer, parseManifest, proxyHosts, ReleaseUpdater, safeReason, swapBundle, type FetchFn, type ReleaseUpdaterOptions } from '../src/main/release-updater';
 import { checkUnpacked, checkZip, codesignArgs, MAC_REQUIREMENT, VerifyError, zipEntries } from '../src/main/update-verify';
 
 /*
@@ -258,6 +258,57 @@ describe('check', () => {
     const s = await updater({ kind: 'manual' }).u.check();
     expect(s.install).toBe('manual');
     expect(s.releasesUrl).toBe('https://github.com/Suchun-sv/meetless/releases');
+  });
+});
+
+describe('network through the injected fetch (Electron net.fetch in the app)', () => {
+  /** A fetch that records every URL and forwards to the global one (the test server). */
+  const recording = () => {
+    const urls: string[] = [];
+    const f: FetchFn = (url, init) => {
+      urls.push(url);
+      return fetch(url, init);
+    };
+    return { f, urls };
+  };
+
+  it('the check, the notes and the download all go through it', async () => {
+    const { f, urls } = recording();
+    const { bundle } = installedApp();
+    const { u } = updater({ bundlePath: bundle, fetch: f });
+    await u.check();
+    expect(await u.install()).toEqual({ ok: true });
+    const paths = urls.map((x) => new URL(x).pathname);
+    expect(paths).toContain('/releases/latest/download/latest-mac.yml');
+    expect(paths).toContain('/api/releases/tags/v0.2.0');
+    expect(paths).toContain('/releases/download/v0.2.0/Meetless-0.2.0-mac-arm64.zip');
+    expect(hits.length).toBe(urls.length);
+  });
+
+  it('a fetch that follows redirects itself is still held to the host allowlist', async () => {
+    redirectTo = `${evilBase}/zip`;
+    const following: FetchFn = (url, init) => fetch(url, { ...init, redirect: 'follow' });
+    const { u } = updater({ bundlePath: installedApp().bundle, fetch: following });
+    await u.check();
+    expect(await u.install()).toEqual({ ok: false, code: 'UPDATE_DOWNLOAD' });
+  });
+
+  it('a failed check is logged with the reason and the proxy, and marked for a retry', async () => {
+    const logs: string[] = [];
+    const timeout: FetchFn = () => Promise.reject(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }));
+    const { u, states } = updater({ fetch: timeout, log: (m) => void logs.push(m), resolveProxy: async () => 'PROXY user:secret@127.0.0.1:<proxy-port>; DIRECT' });
+    const s = await u.check();
+    expect(s.checkError).toBe('UPDATE_CHECK');
+    expect(states.at(-1)?.checkError).toBe('UPDATE_CHECK');
+    expect(logs).toEqual(['update check failed: The operation was aborted due to timeout; proxy: PROXY 127.0.0.1:<proxy-port>; DIRECT']);
+    // The retry succeeds and clears the mark.
+    const again = updater({ fetch: (url, init) => fetch(url, init) });
+    expect((await again.u.check()).checkError).toBeNull();
+  });
+
+  it('log lines carry origins only, never a path or query', () => {
+    expect(safeReason(new Error('fetch https://x.example/a/b?token=abc failed'))).toBe('fetch https://x.example failed');
+    expect(proxyHosts('PROXY a.example:8080;  SOCKS5 u:p@b.example:1080')).toBe('PROXY a.example:8080; SOCKS5 b.example:1080');
   });
 });
 

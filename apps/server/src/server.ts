@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Id } from '@meetless/core';
 import { EVENT_TYPES } from '@meetless/core';
 import { InviteService } from './accounts/invites';
+import { aiConfigFromEnv, type AiConfig } from './agents/deepseek';
 import { loadSkillMarkdown, skillPathFromEnv } from './accounts/guide';
 import { parseRateLimitEnv, RateLimiter, type RateLimitOpts } from './api/ratelimit';
 import { Authenticator, DevAuth, parseDevUsers, type DevUser } from './auth';
@@ -85,6 +86,8 @@ export interface ServerConfig {
    * `GET /v1/office-files/:ticket` (`off` disables the socket, so no file is ever servable).
    */
   onlyoffice: { url: string | null; jwtSecret: string | null; publicUrl: string; filesSocket: string | null };
+  /** The project agent's model (`MEETLESS_AI_*`, see docs/AI.md); null or absent = rule-only. */
+  ai?: AiConfig | null;
 }
 
 const DEFAULT_ONLYOFFICE_URL = 'http://127.0.0.1:55435';
@@ -155,6 +158,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
       pdfText: env.MEETLESS_PDF_TEXT !== 'off',
     },
     env,
+    ai: aiConfigFromEnv(env),
     sample: sampleFromEnv(env),
     repoRoot,
     webDir: env.MEETLESS_WEB_DIR === 'off' ? null : resolve(env.MEETLESS_WEB_DIR ?? join(repoRoot, 'apps/desktop/dist/renderer')),

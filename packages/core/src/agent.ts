@@ -29,7 +29,8 @@ export interface AgentRequest {
 
 export type AgentAnswer =
   /** `materials`: matching inputs and artifacts linked to no need (at the page for artifact text); empty when none. */
-  | { intent: 'retrieval'; needs: { needId: Id; hits: SearchHit[] }[]; materials: MaterialCite[]; cites: Id[] }
+  /** `text`: a generated answer (DeepSeek, server side); the needs and materials are then the ones it cited. */
+  | { intent: 'retrieval'; needs: { needId: Id; hits: SearchHit[] }[]; materials: MaterialCite[]; cites: Id[]; text?: string }
   | { intent: 'summary'; projectId: Id | null; round: { roundId: Id; daysLeft: number } | null; counts: Record<'doing' | 'todo' | 'met', number>; projects: number; cites: Id[] }
   /** 'confirm' covers extracts and questions; its id is the To confirm id (HomeItems.confirm). */
   | { intent: 'today'; items: { kind: 'conflict' | 'toMe' | 'mine' | 'stale' | 'proposal' | 'confirm'; projectId: Id; id: Id; needId: Id | null; daysLeft: number | null }[]; cites: Id[] }
@@ -59,10 +60,22 @@ export interface MaterialCite {
   title: string;
 }
 
+/** Why a free question got the rule answer instead of a generated one. */
+export type AgentFallback = 'not_configured' | 'error' | 'timeout' | 'budget' | 'rate' | 'offline';
+
 export interface AgentReply {
   answer: AgentAnswer;
   provider: string;
   simulated: boolean;
+  /** Set by `POST /v1/agent/ask`: who wrote the answer. Absent on replies built in the client. */
+  source?: 'deepseek' | 'rules';
+  /** Set when a free question fell back to the rule answer. */
+  fallback?: AgentFallback;
+}
+
+/** A free question (retrieval or summary): the only kind the server sends to the model. Every other intent stays rule-based. */
+export function isFreeQuestion(a: AgentAnswer): boolean {
+  return a.intent === 'retrieval' || a.intent === 'summary';
 }
 
 export interface ProjectAgentProvider {
@@ -136,7 +149,7 @@ function firstMatch(t: string, q: ReadonlySet<string>): number {
  * At most `n` characters (code points, so a CJK or astral character is never split) of `text`, centred on the
  * first match of the question, with an ellipsis on each side that was cut.
  */
-function snippet(text: string, q: ReadonlySet<string>, n: number): string {
+export function snippet(text: string, q: ReadonlySet<string>, n: number): string {
   const t = text.trim();
   const cps = [...t];
   if (cps.length <= n) return t;

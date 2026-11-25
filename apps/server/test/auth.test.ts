@@ -102,7 +102,7 @@ describe('dev auth off', () => {
     const { token } = await insertToken(s, 'personal', 'u-kai', 'app');
     const me = await http(s.base, token, 'GET', '/v1/me');
     expect(me.status).toBe(200);
-    expect(me.json).toEqual({ user: { id: 'u-kai', displayName: 'Kai', locale: 'en' }, devAuth: false });
+    expect(me.json).toEqual({ user: { id: 'u-kai', displayName: 'Kai', locale: 'en' }, devAuth: false, ai: { enabled: false, provider: null } });
   });
 
   it('with devAuth off no dev user is registered', async () => {
@@ -121,7 +121,7 @@ describe('dev auth on', () => {
 
   it('/health reports devAuth on', async () => {
     expect((await http(s.base, null, 'GET', '/health')).json.devAuth).toBe(true);
-    expect((await http(s.base, TOKENS.lin, 'GET', '/v1/me')).json).toEqual({ user: { id: IDS.lin, displayName: 'Lin An', locale: 'zh-CN' }, devAuth: true });
+    expect((await http(s.base, TOKENS.lin, 'GET', '/v1/me')).json).toEqual({ user: { id: IDS.lin, displayName: 'Lin An', locale: 'zh-CN' }, devAuth: true, ai: { enabled: false, provider: null } });
   });
 
   it('an agent token is refused on commands, events, blobs, ws and user API routes', async () => {

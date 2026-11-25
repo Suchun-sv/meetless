@@ -2,10 +2,12 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type Key
 import { chatMessages, type Id, type Suggestion } from '@meetless/core';
 import { useApp } from '../app/AppContext';
 import { newId } from '../model/ids';
+import { useAiEnabled } from './ai';
 import { registerComposer } from './focus';
 import { routeErrorText } from '../setup/model';
 import {
   acceptsFile,
+  askCommands,
   chipLabel,
   chipOutcome,
   chipsFor,
@@ -46,6 +48,9 @@ export function Composer({ scope, inline }: { scope: 'home' | Id; inline?: boole
   const [text, setText] = useState('');
   const [priv, setPrivState] = useState(() => (scope !== 'home' ? getPriv(scope) : false));
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const ai = useAiEnabled(api, me);
+  /** The question waiting on `agent.ask`; the composer takes no new question meanwhile. */
+  const [pending, setPending] = useState<string | null>(null);
 
   useEffect(() => {
     setPrivState(scope !== 'home' ? getPriv(scope) : false);
@@ -73,10 +78,22 @@ export function Composer({ scope, inline }: { scope: 'home' | Id; inline?: boole
   }
 
   async function send() {
-    if (!shouldSend(text, false)) return;
+    if (pending !== null || !shouldSend(text, false)) return;
     const value = text;
     setText('');
-    const sent = await runCommands(sendCommands(live, me, scope, value, today, new Date().toISOString(), newId('msg')));
+    const messageId = newId('msg');
+    let cmds: U1Command[];
+    if (ai) {
+      setPending(value);
+      try {
+        cmds = await askCommands(live, me, scope, value, today, new Date().toISOString(), messageId, (req) => api('agent.ask', req));
+      } finally {
+        setPending(null);
+      }
+    } else {
+      cmds = sendCommands(live, me, scope, value, today, new Date().toISOString(), messageId);
+    }
+    const sent = await runCommands(cmds);
     // A rejected question (submit has shown why) gives the text back, unless the user has typed again.
     if (!sent) setText((cur) => (cur === '' ? value : cur));
   }
@@ -151,7 +168,7 @@ export function Composer({ scope, inline }: { scope: 'home' | Id; inline?: boole
 
   return (
     <div className={`composer-wrap${inline ? ' inline' : ''}`} data-testid="composer" data-scope={scope}>
-      {msgs.length > 0 && <Thread scope={scope} />}
+      {(msgs.length > 0 || pending !== null) && <Thread scope={scope} pending={pending} />}
       {chips.length > 0 && (
         <div className="chips">
           {chips.map((c) => (
@@ -161,7 +178,7 @@ export function Composer({ scope, inline }: { scope: 'home' | Id; inline?: boole
           ))}
         </div>
       )}
-      <div className={`composer${priv ? ' priv' : ''}`}>
+      <div className={`composer${priv ? ' priv' : ''}${pending !== null ? ' pending' : ''}`} aria-busy={pending !== null}>
         {scope !== 'home' && (
           <button type="button" className="cm-plus" data-testid="composer-attach" title={t('cm.attach')} aria-label={t('cm.attach')} onClick={() => fileRef.current?.click()}>
             {'+'}
@@ -188,11 +205,23 @@ export function Composer({ scope, inline }: { scope: 'home' | Id; inline?: boole
             </button>
           </div>
         )}
-        <button type="button" className={`cm-send${text.trim() ? ' on' : ''}`} data-testid="composer-send" aria-label={t('cm.send')} onClick={() => void send()}>
+        <button
+          type="button"
+          className={`cm-send${text.trim() && pending === null ? ' on' : ''}`}
+          data-testid="composer-send"
+          aria-label={t('cm.send')}
+          disabled={pending !== null}
+          onClick={() => void send()}
+        >
           {'↑'}
         </button>
         {scope !== 'home' && <input ref={fileRef} type="file" className="cm-file" accept={ACCEPT} onChange={(e) => void onFileChange(e)} />}
       </div>
+      {ai && (
+        <div className="cm-hint tone-ai" data-testid="ai-note">
+          {t('ch.aiNote')}
+        </div>
+      )}
       {!inline && <div className="cm-hint">{t('cm.hint')}</div>}
     </div>
   );

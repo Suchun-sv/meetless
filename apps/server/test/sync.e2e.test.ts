@@ -109,7 +109,7 @@ describe('clients in different locales share one server-ordered state', () => {
     const blob = await clients.zhou.readBlob(fileHash);
     expect(blob.ok && new TextDecoder().decode(blob.bytes)).toBe('Export design v1, 12 fields');
     const me = await http(server.url, TOKENS.ben, 'GET', '/v1/me');
-    expect(me.json).toEqual({ user: { id: IDS.ben, displayName: 'Ben Carter', locale: 'en' }, devAuth: true });
+    expect(me.json).toEqual({ user: { id: IDS.ben, displayName: 'Ben Carter', locale: 'en' }, devAuth: true, ai: { enabled: false, provider: null } });
   });
 
   it('repeated submissions of one command id are deduplicated', async () => {

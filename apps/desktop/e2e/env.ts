@@ -20,6 +20,8 @@ export const E2E = {
   root: resolve(import.meta.dirname, '../.data/e2e'),
 };
 export const serverUrl = `http://127.0.0.1:${E2E.base}`;
+/** The web app: the server's own origin serves the renderer built by global setup. */
+export const webUrl = serverUrl;
 
 /** The port of bridge slot 1..9 (base+slot). Each spec takes its own slots. */
 export function bridgePort(slot: number): number {

@@ -21,6 +21,16 @@ const noop = () => undefined;
 const view = (state: UpdateState | null, confirming = false) => <UpdateView state={state} confirming={confirming} onAsk={noop} onCancel={noop} onInstall={noop} />;
 
 describe.each(LOCALES)('update entry (%s)', (l) => {
+  it('a failed check with nothing offered shows the retry line', () => {
+    const api = alexApi(l);
+    const failed: UpdateState = { ...OFFER, available: null, checkError: 'UPDATE_CHECK' };
+    const html = render(api, <UpdateView state={failed} confirming={false} onAsk={noop} onCancel={noop} onInstall={noop} onRetry={noop} />);
+    expect(html).toContain('data-testid="update-retry"');
+    expect(textOf(html)).toContain(api.t('upd.checkFailed'));
+    guards(`update retry ${l}`, html);
+    expect(render(api, view({ ...OFFER, available: null }))).not.toContain('update-retry');
+  });
+
   it('offers the new version with an update button', () => {
     const api = alexApi(l);
     const html = render(api, view(OFFER));

@@ -984,3 +984,42 @@ describe('style props in .tsx', () => {
     ).toEqual([]);
   });
 });
+
+describe('phone layout (design 2026-11-25 §7)', () => {
+  const PHONE = '@media (max-width: 760px)';
+  const WIDE = '@media (max-width:1200px)';
+  const phone = STYLE_RULES.filter((r) => r.media === PHONE);
+  const sets = (r: Rule, k: string, v: (x: string) => boolean) => r.decls.some(([dk, dv]) => dk === k && v(dv));
+
+  it('the phone breakpoint is exactly max-width: 760px', () => {
+    const widths = [...new Set(RULES.map((r) => r.media).filter((m): m is string => m !== null && /width/.test(m)))];
+    expect(widths.filter((m) => m !== WIDE)).toEqual([PHONE]);
+    for (const [file, src] of SOURCES) for (const m of src.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/@media[^{]*width[^{]*/g)) expect([WIDE, PHONE], `${file}: ${m[0]}`).toContain(m[0].trim());
+    expect(phone.length).toBeGreaterThan(0);
+  });
+
+  it('inside the phone breakpoint, .btn, .nav, .chip, .inp and the composer input have min-height var(--touch-min)', () => {
+    for (const sel of ['.btn', '.nav', '.chip', '.inp', '.composer textarea'])
+      expect(
+        phone.some((r) => selectorsOf(r).includes(sel) && sets(r, 'min-height', (v) => v === 'var(--touch-min)')),
+        sel,
+      ).toBe(true);
+  });
+
+  it('the composer uses var(--kb-inset) for its bottom offset under the breakpoint', () => {
+    expect(phone.some((r) => selectorsOf(r).includes('.composer-wrap') && sets(r, 'bottom', (v) => v.includes('var(--kb-inset)')))).toBe(true);
+    // Outside the breakpoint nothing reads the keyboard inset: the desktop layout is unchanged.
+    expect(STYLE_RULES.filter((r) => r.media !== PHONE && r.decls.some(([, v]) => v.includes('--kb-inset'))).map((r) => r.selector)).toEqual([]);
+  });
+
+  it('.nav-toggle and .drawer-back are hidden outside the breakpoint', () => {
+    for (const sel of ['.nav-toggle', '.drawer-back', '.nav-scrim']) {
+      const outside = STYLE_RULES.filter((r) => r.media === null && selectorsOf(r).includes(sel) && r.decls.some(([k]) => k === 'display'));
+      expect(outside.length, sel).toBeGreaterThan(0);
+      expect(outside.every((r) => sets(r, 'display', (v) => v === 'none')), sel).toBe(true);
+      expect(STYLE_RULES.some((r) => r.media !== null && r.media !== PHONE && selectorsOf(r).some((s) => s.includes(sel))), sel).toBe(false);
+    }
+    // nav-open only means something under the breakpoint (Review Focus 5: no stuck scrim when wide).
+    expect(STYLE_RULES.filter((r) => r.media !== PHONE && r.selector.includes('nav-open')).map((r) => r.selector)).toEqual([]);
+  });
+});

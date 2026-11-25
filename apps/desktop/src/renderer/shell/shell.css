@@ -84,3 +84,24 @@
 .crumb-act{opacity:0;transition:opacity var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard)}
 .crumb3:hover .crumb-act,.crumb-act:focus-visible{opacity:1}
 .crumb-inp{width:auto;min-width:0;flex:0 1 360px;padding:var(--space-1) var(--space-2);font-size:var(--text-md);font-weight:var(--weight-semibold)}
+
+/* Phone (design 2026-11-25 §7): the sidebar is a drawer over a scrim, opened by the top bar's
+   nav-toggle; both are hidden at 761px and wider, where nav-open has no effect. Tokens only. */
+.nav-toggle,.nav-scrim{display:none}
+@media (max-width: 760px){
+  .nav-toggle{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--touch-min);height:var(--touch-min);margin-left:calc(var(--space-2) * -1);border:0;background:transparent;border-radius:var(--radius-md);cursor:pointer;color:inherit}
+  .nav-toggle[aria-expanded="true"]{background:var(--color-hover)}
+  .side{display:none;position:fixed;top:0;bottom:0;left:0;width:var(--layout-nav);z-index:calc(var(--z-drawer) + 1);border-right:var(--border);box-shadow:var(--shadow-lg);padding:calc(var(--space-2) + var(--safe-top)) var(--space-2) calc(var(--space-2) + var(--safe-bottom))}
+  .app.nav-open .side{display:flex}
+  .app.nav-open .nav-scrim{display:block;position:fixed;inset:0;z-index:var(--z-drawer);background:var(--color-scrim)}
+  .nav,.side-new{min-height:var(--touch-min)}
+  .prow-act{opacity:1}
+  .prow{padding-right:var(--space-12)}
+  .psub-links .link{min-height:var(--touch-min)}
+  .top{height:calc(var(--layout-topbar) + var(--safe-top));padding:var(--safe-top) var(--space-3) 0;gap:var(--space-2)}
+  .crumb3{flex:1;padding-left:0}
+  .crumb3 .faint{white-space:nowrap}
+  .crumb-act,.top-members{display:none}
+  .ask-btn{height:var(--touch-min);flex:none}
+  .statusbar{padding:var(--space-1) var(--space-4) calc(var(--space-1) + var(--safe-bottom))}
+}

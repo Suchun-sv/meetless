@@ -6,6 +6,7 @@ import {
   clip,
   handoffStaleness,
   HOME_CARDS,
+  isFreeQuestion,
   PROJECT_CARDS,
   RULES_PROVIDER_ID,
   suggestions,
@@ -81,6 +82,29 @@ export function sendCommands(s: State, me: Id, scope: 'home' | Id, text: string,
   const out: U1Command[] = [{ type: 'chat.asked', payload: { messageId, scope, text, reply } }];
   if (reply.answer.intent === 'addCard') out.push({ type: 'dashboard.set', payload: addCardPayload(cardsFor(s, me, scope), scope, reply.answer.card, now) });
   return out;
+}
+
+/** The server's `agent.ask`, as the app's `api` gives it. */
+export type AskFn = (req: ApiRequest<'agent.ask'>) => Promise<Result<{ data: { reply: AgentReply } }>>;
+
+/**
+ * The commands a typed question produces when the server answers free questions with a model
+ * (`me.ai.enabled`): intents stay with the local rules, as in `sendCommands`; a free question goes
+ * to `agent.ask`. When the server cannot be reached the local rule answer is used, marked
+ * `fallback: 'offline'`.
+ */
+export async function askCommands(s: State, me: Id, scope: 'home' | Id, text: string, today: IsoDate, now: IsoTime, messageId: Id, ask: AskFn): Promise<U1Command[]> {
+  const local = answer(s, { userId: me, scope: agentScope(scope), text, today });
+  if (!isFreeQuestion(local.answer)) return sendCommands(s, me, scope, text, today, now, messageId);
+  const r = await ask({ projectId: scope, question: text }).catch(() => null);
+  const reply: AgentReply = r?.ok ? r.data.reply : { ...local, source: 'rules', fallback: 'offline' };
+  return [{ type: 'chat.asked', payload: { messageId, scope, text, reply } }];
+}
+
+/** The reply's label: who wrote it, and the note under it (the fallback reason, when it fell back). */
+export function replyLabel(reply: AgentReply): { generated: boolean; note: 'ch.genNote' | 'ch.sim' | 'ch.fellBack' } {
+  if (reply.source === 'deepseek') return { generated: true, note: 'ch.genNote' };
+  return { generated: false, note: reply.fallback && reply.fallback !== 'not_configured' ? 'ch.fellBack' : 'ch.sim' };
 }
 
 /** What clicking a chip does: commands to send, a need to open, or an overlay to show. */

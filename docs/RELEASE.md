@@ -7,7 +7,7 @@ app reads. The workflow and the updater are adapted from Gleeok's.
 ## Cut a release
 
 1. Pick the version, `X.Y.Z`. The workflow takes it from the tag, so `apps/desktop/package.json`
-   only needs bumping when the repo itself should show it (it is `0.1.1` now).
+   only needs bumping when the repo itself should show it (it is `0.1.2` now).
 2. Tag the commit and push the tag:
 
    ```sh
@@ -82,7 +82,9 @@ reaches it only through two bridge calls, `updatesCheck()` and `updatesInstall()
   avoids the API rate limit. The version in the manifest is compared with the running one by
   `newer()`. The notes come from the GitHub API
   (`/repos/Suchun-sv/meetless/releases/tags/vX.Y.Z`) when it answers; otherwise the dialog shows
-  "Meetless X.Y.Z". A failed check changes nothing and shows nothing.
+  "Meetless X.Y.Z". Every request goes through Electron's `net.fetch`, so the system proxy and
+  PAC apply (Node's fetch ignores them). A failed check keeps what was offered, logs the reason and
+  the proxy Chromium resolved (hosts only), and the sidebar shows 「检查更新失败，点此重试」.
 - **UI.** The sidebar user row shows 「有新版本 X.Y.Z」 with 「升级」. The button opens a confirm
   dialog with the notes, and a progress line follows the install. Nothing installs without
   that click.

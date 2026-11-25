@@ -32,18 +32,50 @@ export function UpdateEntry() {
       off();
     };
   }, [bridge]);
+  const retry = () => {
+    void bridge
+      .updatesCheck()
+      .then((r) => {
+        if (r.ok) setState(r.update);
+      })
+      .catch(() => undefined);
+  };
   const install = () => {
     setConfirming(false);
     // The outcome arrives as `update` events (progress, failure); a restart ends the app.
     void bridge.updatesInstall().catch(() => undefined);
   };
-  return <UpdateView state={state} confirming={confirming} onAsk={() => setConfirming(true)} onCancel={() => setConfirming(false)} onInstall={install} />;
+  return <UpdateView state={state} confirming={confirming} onAsk={() => setConfirming(true)} onCancel={() => setConfirming(false)} onInstall={install} onRetry={retry} />;
 }
 
 /** What the entry shows for `state`; exported for the component tests. */
-export function UpdateView({ state, confirming, onAsk, onCancel, onInstall }: { state: UpdateState | null; confirming: boolean; onAsk: () => void; onCancel: () => void; onInstall: () => void }) {
+export function UpdateView({
+  state,
+  confirming,
+  onAsk,
+  onCancel,
+  onInstall,
+  onRetry,
+}: {
+  state: UpdateState | null;
+  confirming: boolean;
+  onAsk: () => void;
+  onCancel: () => void;
+  onInstall: () => void;
+  onRetry?: () => void;
+}) {
   const { t, tr } = useApp();
-  if (!state?.available) return null;
+  if (!state?.available) {
+    if (!state?.checkError || !onRetry) return null;
+    // A failed check (network, proxy, timeout) says so, instead of showing nothing.
+    return (
+      <div className="upd" data-testid="update">
+        <button type="button" className="link upd-s tone-danger" data-testid="update-retry" onClick={onRetry}>
+          {t('upd.checkFailed')}
+        </button>
+      </div>
+    );
+  }
   const { version, notes } = state.available;
   const progress =
     state.phase === 'downloading'

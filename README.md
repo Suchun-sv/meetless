@@ -2,8 +2,10 @@
 
 A desktop app for teams that work through needs. Needs come in, people work around artifacts, hand needs
 to each other, deliver in rounds, and get feedback. Each person's Claude Code or Codex pulls live need
-context and reports progress over MCP. Every project has one shared project agent. It is rule-based and
-labelled as such: Meetless makes no model calls (docs/ARCHITECTURE.md §6).
+context and reports progress over MCP. Every project has one shared project agent. Its actions and
+dashboards are rule-based. Free questions can be answered by DeepSeek when the server operator turns it on
+(docs/AI.md); otherwise, or when the model fails, they get the rule answer. Every answer says which it is
+(docs/ARCHITECTURE.md §6).
 
 ```
 apps/server        sync service: Postgres event log, invite-code accounts, HTTP API, MCP over HTTP (/mcp)
@@ -18,6 +20,8 @@ design/claude-design-v3   the v3 UI prototype
 docs/ARCHITECTURE.md   how it is built, what is simulated, settings, tests, gaps
 docs/MCP.md            connecting Claude Code and Codex
 docs/MACOS.md          the unsigned macOS arm64 build
+docs/WEB.md            the web and phone version
+docs/AI.md             the project agent's DeepSeek answers: what is sent, limits, turning it on and off
 docs/screenshots/v3/   every page in zh-CN and en at 1440x900
 ```
 
@@ -40,6 +44,14 @@ pnpm dev -- --sample zh-CN          # server :4870 (dev auth on), two dev client
 `pnpm dev` turns dev auth on (`dev-alex`, `dev-zhou`, …). A real server keeps it off. On first start it
 writes a one-time admin invite to `<dataDir>/admin-invite.txt` (mode 0600). Redeem it on the sign-in page
 with your name to create the first account, then invite teammates from a project's Members page.
+
+## Web and phone
+
+The server also serves the app at `/`. Open its address in a phone or desktop browser to get the same
+Meetless, online only, with a phone layout below 760px. Sign in with an invite code or a personal token;
+the session is an HttpOnly cookie. Local git, Overleaf and Notion capture stay in the desktop app.
+`docs/WEB.md` covers the address (a `tailscale serve` HTTPS handler), signing in on a phone, security and
+limits.
 
 ## Mac
 

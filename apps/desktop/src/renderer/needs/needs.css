@@ -87,3 +87,19 @@
 
 /* Drawer edit controls (needs/DrawerEdit): compact selects, so the details stay short */
 .inp-c{width:auto;justify-self:start;max-width:100%;padding:var(--space-1) var(--space-2);font-size:var(--text-sm)}
+
+/* Phone (design 2026-11-25 §7): the drawer is a full-screen page with drawer-back in its header
+   (hidden at 761px and wider); the board scrolls sideways a column at a time; key-value rows stack. */
+.drawer-back{display:none}
+@media (max-width: 760px){
+  .drawer{position:fixed;inset:0;z-index:var(--z-drawer);border-left:0;padding:calc(var(--space-2) + var(--safe-top)) var(--space-4) calc(var(--space-12) + var(--safe-bottom))}
+  .drawer-back{display:inline-flex;align-self:flex-start;margin-left:calc(var(--space-2) * -1)}
+  .dr-x{display:none}
+  .bar{padding:var(--space-4) var(--space-4) var(--space-1)}
+  .cols{grid-auto-columns:82vw;gap:var(--space-3);padding:var(--space-2) var(--space-4) var(--space-8);scroll-snap-type:x proximity}
+  .col{scroll-snap-align:center}
+  .lineage{padding:var(--space-4) var(--space-4) var(--space-8)}
+  .kv{grid-template-columns:minmax(0,1fr);gap:var(--space-1)}
+  .kv>span:first-child{margin-top:var(--space-1)}
+  .wlist li{gap:var(--space-2)}
+}

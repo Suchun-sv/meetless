@@ -12,3 +12,9 @@
 .plain{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--space-1)}
 .note{font-size:var(--text-sm);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);background:var(--color-surface);color:var(--color-text-secondary)}
 .fb{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);border-radius:var(--radius-md);background:var(--color-surface);margin-bottom:var(--space-2);font-size:var(--text-sm)}
+
+/* Phone (design 2026-11-25 §7): a round's columns stack. */
+@media (max-width: 760px){
+  .dl{padding:var(--space-3)}
+  .dl-grid{grid-template-columns:minmax(0,1fr);gap:var(--space-4)}
+}

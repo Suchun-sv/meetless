@@ -34,3 +34,10 @@
 .q-park{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);border:var(--border);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);color:var(--color-text);background:var(--color-bg)}
 .q-pick{display:flex;flex-direction:column;gap:var(--space-2);border:var(--border);border-radius:var(--radius-md);padding:var(--space-3)}
 .q-pick .btn{align-self:flex-start}
+
+/* Phone (design 2026-11-25 §7): conflict sides stack inside the bottom sheet. */
+@media (max-width: 760px){
+  .cf{grid-template-columns:minmax(0,1fr)}
+  .people{grid-template-columns:minmax(0,1fr)}
+  .person{min-height:var(--touch-min)}
+}

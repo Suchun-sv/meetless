@@ -1,7 +1,7 @@
 import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, session, shell } from 'electron';
 import { isWebUrl } from '@meetless/core';
 import { BRIDGE_METHODS, ClientNode, createFileLog, type BridgeEvent, type BridgeMethod, type FileLog, type MeetlessBridge } from '@meetless/client';
 import { invokeChannel, PUSH_CHANNEL } from '../shared/ipc';
@@ -199,6 +199,9 @@ function runApp(): void {
       setTimeout(() => app.quit(), 500);
     },
     log: (m) => log(m),
+    // Chromium's network stack: the macOS system proxy and PAC apply, which Node's fetch ignores.
+    fetch: (url, init) => net.fetch(url, init),
+    resolveProxy: (url) => session.defaultSession.resolveProxy(url),
     onChange: (update) => {
       const e: BridgeEvent = { type: 'update', update };
       for (const w of BrowserWindow.getAllWindows()) w.webContents.send(PUSH_CHANNEL, e);

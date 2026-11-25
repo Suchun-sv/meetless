@@ -1,4 +1,5 @@
 import type {
+  AgentReply,
   ArtifactKind,
   Id,
   InputKind,
@@ -24,6 +25,8 @@ export interface UserInfo {
 export interface MeRes {
   user: UserInfo;
   devAuth: boolean;
+  /** Whether free questions to the project agent go to a model (server-side key), and which. */
+  ai: { enabled: boolean; provider: 'deepseek' | null };
 }
 
 export interface InviteInfo {
@@ -110,6 +113,8 @@ export interface ApiSpec {
   };
   /** Token-agnostic setup instructions (the Agents page's own text); `<TOKEN>` is a placeholder. */
   'agent.guide': { req: Record<string, never>; res: { markdown: string } };
+  /** One question to the project agent, answered from the caller's own view (generated, or the rule answer as fallback). */
+  'agent.ask': { req: { projectId: Id | 'home'; question: string; threadId?: Id }; res: { reply: AgentReply } };
   'inputs.import': {
     req: {
       projectId: Id;

@@ -42,3 +42,27 @@
   .cm-send.on:hover{transform:translateY(-1px)}
   .cm-plus:active,.cm-send.on:active{transform:translateY(1px) scale(.985);transition-duration:calc(var(--duration-fast) * .75)}
 }
+
+/* Phone (design 2026-11-25 §7): the composer stays at the bottom of the page and above the
+   on-screen keyboard (--kb-inset, set by ui/viewport.ts), clear of the home indicator. */
+@media (max-width: 760px){
+  .composer-wrap{bottom:var(--kb-inset);padding:var(--space-2) var(--space-3) calc(var(--space-2) + var(--safe-bottom))}
+  .withc .composer-wrap{position:sticky;bottom:var(--kb-inset)}
+  .composer{padding:var(--space-1) var(--space-1) var(--space-1) var(--space-2);gap:var(--space-1)}
+  .composer textarea{min-height:var(--touch-min);font-size:var(--text-lg);padding:var(--space-2) var(--space-1)}
+  .cm-plus,.cm-send{width:var(--touch-min);height:var(--touch-min)}
+  /* With attach and the privacy switch, the text field takes the first row and the controls the second */
+  .composer:has(.seg.pv){flex-wrap:wrap;align-items:center}
+  .composer:has(.seg.pv) textarea{flex:1 1 100%;order:-1}
+  .seg.pv{margin-right:auto}
+  .cm-hint{display:none}
+  .chips{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start}
+  .chip{flex:none}
+  .thread{max-height:32vh}
+  .msg-u{max-width:90%}
+}
+
+/* DeepSeek answers (docs/AI.md): plain text as the model wrote it, line breaks kept. */
+.rp-gen{white-space:pre-wrap}
+.composer.pending textarea{color:var(--color-text-tertiary)}
+.cm-hint.tone-ai{color:var(--color-ai)}

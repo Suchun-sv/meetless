@@ -20,6 +20,8 @@ const web =
 console.log(
   `[meetless-server] listening on ${server.url} (store: ${server.service.store.kind}, data: ${cfg.dataDir}, office files socket: ${server.filesSocket ?? 'off'}, web: ${web})`,
 );
+// Never the key: provider and model only.
+console.log(`[meetless-server] project agent: ${cfg.ai ? `${cfg.ai.provider} (${cfg.ai.model}, ${cfg.ai.dailyTokens} tokens a day)` : 'rules only'}`);
 if (cfg.devAuth) {
   console.warn(
     `[meetless-server] DEV-ONLY authentication is enabled: fixed bearer tokens for ${cfg.devUsers.map((u) => u.id).join(', ')}. Do not expose this service.`,

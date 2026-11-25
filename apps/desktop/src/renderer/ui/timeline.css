@@ -24,3 +24,11 @@
 .tl-today{position:absolute;top:0;bottom:0;width:0;border-left:var(--border-width) solid var(--color-text);z-index:3;pointer-events:none}
 .tl-foot{display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-2);font-size:var(--text-xs)}
 .legend{display:inline-flex;align-items:center;gap:var(--space-2);color:var(--color-text-tertiary)}
+
+/* Phone (design 2026-11-25 §7) */
+@media (max-width: 760px){
+  .tl{margin:var(--space-1) var(--space-4) 0;padding:var(--space-3)}
+  /* Week labels would overlap at this width; only today's stays */
+  .tl-wk{visibility:hidden}
+  .tl-wk.tl-wk-today{visibility:visible}
+}

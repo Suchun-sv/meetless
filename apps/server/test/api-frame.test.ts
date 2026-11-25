@@ -78,7 +78,7 @@ describe('registered API routes (real server)', () => {
       }
     }
     expect(HANDLERS.me).toBeDefined();
-    expect((await http(s.base, TOKENS.lin, 'GET', '/v1/me')).json).toEqual({ user: { id: IDS.lin, displayName: 'Lin An', locale: 'zh-CN' }, devAuth: true });
+    expect((await http(s.base, TOKENS.lin, 'GET', '/v1/me')).json).toEqual({ user: { id: IDS.lin, displayName: 'Lin An', locale: 'zh-CN' }, devAuth: true, ai: { enabled: false, provider: null } });
   });
 
   it('an unknown path answers 404 NOT_FOUND in the API error shape', async () => {

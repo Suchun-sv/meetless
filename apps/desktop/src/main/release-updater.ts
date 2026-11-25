@@ -24,7 +24,9 @@ import { BUNDLE_ID, bundleInfo, checkUnpacked, checkZip, SEMVER, verifySignature
  * - Any other install type (a .deb, an unpacked dir, a dev run) offers the releases page.
  *
  * Nothing installs without the user's click: `check()` only looks, `install()` is the click.
- * This module never imports electron, so it runs under plain Node in the tests.
+ * This module never imports electron, so it runs under plain Node in the tests. The main process
+ * passes Electron's `net.fetch` (`opts.fetch`), which goes through the system proxy and PAC the way
+ * Chromium does; Node's own fetch ignores them, so a Mac behind a proxy timed out (0.1.1).
  */
 
 const REPO = 'Suchun-sv/meetless';
@@ -126,25 +128,66 @@ export function macZipName(version: string, arch: string): string | null {
   return SEMVER.test(version) && (arch === 'arm64' || arch === 'x64') ? `Meetless-${version}-mac-${arch}.zip` : null;
 }
 
+/** The fetch the updater uses: Electron's `net.fetch` in the app, the global one in tests. */
+export type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+
+/** A URL the updater may read from: https on `REDIRECT_HOSTS`, or the configured base's own origin (a test or dev server). */
+function allowed(u: URL, home: string): boolean {
+  return u.origin === home || (u.protocol === 'https:' && REDIRECT_HOSTS.has(u.hostname));
+}
+
 /**
- * GET with redirects followed by hand: each hop must be https on `REDIRECT_HOSTS`, or stay on the
- * configured base's own origin (a test or dev server). Node's fetch would follow any host or scheme.
+ * GET with redirects followed by hand: each hop must pass `allowed`. A fetch that follows a redirect
+ * itself, or answers a manual redirect opaquely (status 0, no Location), is checked on the URL it
+ * ended at instead; the body is only read from an allowed URL either way.
  */
-async function fetchPinned(url: string, base: string, signal: AbortSignal): Promise<Response> {
+async function fetchPinned(f: FetchFn, url: string, base: string, signal: AbortSignal): Promise<Response> {
   const home = new URL(base).origin;
   let u = new URL(url);
   for (let hop = 0; hop < 6; hop++) {
-    const res = await fetch(u, { redirect: 'manual', signal });
+    let res = await f(u.toString(), { redirect: 'manual', signal });
+    if (res.type === 'opaqueredirect' || res.status === 0) {
+      await res.body?.cancel().catch(() => undefined);
+      res = await f(u.toString(), { redirect: 'follow', signal });
+    }
+    if (res.url) {
+      const at = new URL(res.url);
+      if (!allowed(at, home)) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${at.protocol}//${at.host} refused`);
+      }
+    }
     const loc = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
     if (!loc) return res;
     await res.body?.cancel().catch(() => undefined);
     const next = new URL(loc, u);
-    if (!(next.origin === home || (next.protocol === 'https:' && REDIRECT_HOSTS.has(next.hostname)))) {
-      throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${next.protocol}//${next.host} refused`);
-    }
+    if (!allowed(next, home)) throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${next.protocol}//${next.host} refused`);
     u = next;
   }
   throw new UpdateError('UPDATE_DOWNLOAD', 'too many redirects');
+}
+
+/** An error message fit for the log: any URL in it cut to its origin (no path, query or credentials). */
+export function safeReason(e: unknown): string {
+  const err = e as (Error & { cause?: { code?: string; message?: string } }) | null;
+  const msg = String(err?.message ?? e);
+  const cause = err?.cause?.code ?? err?.cause?.message;
+  return `${msg}${cause ? ` (${cause})` : ''}`.replace(/\bhttps?:\/\/[^\s'"]+/g, (m) => {
+    try {
+      return new URL(m).origin;
+    } catch {
+      return '<url>';
+    }
+  });
+}
+
+/** The proxy rule for a URL as Chromium resolved it (`DIRECT`, `PROXY host:port; ...`), with any user:pass@ dropped. */
+export function proxyHosts(rule: string): string {
+  return rule
+    .split(';')
+    .map((r) => r.trim().replace(/\/\/[^@\s/]*@/, '//').replace(/^(\w+)\s+[^@\s]*@/, '$1 '))
+    .filter(Boolean)
+    .join('; ');
 }
 
 /** The body as text, refusing more than `max` bytes. */
@@ -201,6 +244,10 @@ export interface ReleaseUpdaterOptions {
   relaunch?: () => void;
   onChange?: (s: UpdateState) => void;
   log?: (msg: string) => void;
+  /** Every network call goes through this: Electron's `net.fetch` in the app (system proxy and PAC). Default: the global fetch. */
+  fetch?: FetchFn;
+  /** For the log when a check fails: the proxy Chromium uses for a URL (`session.resolveProxy`). */
+  resolveProxy?: (url: string) => Promise<string>;
 }
 
 interface Pending {
@@ -215,8 +262,10 @@ export class ReleaseUpdater {
   private lastCheck = 0;
   private readonly base: string;
   private readonly api: string;
+  private readonly fetch: FetchFn;
 
   constructor(private readonly opts: ReleaseUpdaterOptions) {
+    this.fetch = opts.fetch ?? ((url, init) => fetch(url, init));
     this.base = (opts.baseUrl ?? RELEASES_URL).replace(/\/$/, '');
     this.api = (opts.apiUrl ?? API_URL).replace(/\/$/, '');
     this.state = {
@@ -264,15 +313,18 @@ export class ReleaseUpdater {
     this.inFlight ??= this.latest()
       .then((p) => {
         this.lastCheck = Date.now();
-        this.set({ available: p ? { version: p.version, notes: [] } : null });
+        this.set({ available: p ? { version: p.version, notes: [] } : null, checkError: null });
         return p ? this.notes(p.tag, p.version) : null;
       })
       .then((notes) => {
         if (notes && this.state.available) this.set({ available: { ...this.state.available, notes } });
         return this.current;
       })
-      .catch((e: unknown) => {
-        this.opts.log?.(`update check failed: ${String((e as Error).message ?? e)}`);
+      .catch(async (e: unknown) => {
+        const proxy = await this.opts.resolveProxy?.(this.base).then(proxyHosts, () => 'unknown');
+        this.opts.log?.(`update check failed: ${safeReason(e)}${proxy ? `; proxy: ${proxy}` : ''}`);
+        // The UI offers a retry; what was found before stays offered.
+        this.set({ checkError: 'UPDATE_CHECK' });
         return this.current;
       })
       .finally(() => {
@@ -287,7 +339,7 @@ export class ReleaseUpdater {
    * behind a shared address).
    */
   private async latest(): Promise<Pending | null> {
-    const res = await fetchPinned(`${this.base}/latest/download/${manifestName(this.opts.platform)}`, this.base, AbortSignal.timeout(15_000));
+    const res = await fetchPinned(this.fetch, `${this.base}/latest/download/${manifestName(this.opts.platform)}`, this.base, AbortSignal.timeout(15_000));
     if (res.status === 404) return null;
     if (!res.ok || !res.body) throw new Error(`manifest: HTTP ${res.status}`);
     const { version, files } = parseManifest(await textCapped(res, MANIFEST_MAX_BYTES));
@@ -301,7 +353,7 @@ export class ReleaseUpdater {
   /** The notes from the GitHub API when it answers; a plain line when it does not. */
   private async notes(tag: string, version: string): Promise<string[]> {
     try {
-      const res = await fetch(`${this.api}/releases/tags/${tag}`, {
+      const res = await this.fetch(`${this.api}/releases/tags/${tag}`, {
         headers: { accept: 'application/vnd.github+json', 'user-agent': 'Meetless' },
         signal: AbortSignal.timeout(10_000),
       });
@@ -335,7 +387,7 @@ export class ReleaseUpdater {
     } catch (e) {
       const errno = (e as NodeJS.ErrnoException).code;
       const code = e instanceof UpdateError ? e.code : e instanceof VerifyError ? 'UPDATE_UNTRUSTED' : errno === 'EACCES' || errno === 'EPERM' || errno === 'EROFS' ? 'UPDATE_PERMISSION' : 'UPDATE_FAILED';
-      this.opts.log?.(`update install failed (${code}): ${String((e as Error).message ?? e)}`);
+      this.opts.log?.(`update install failed (${code}): ${safeReason(e)}`);
       this.set({ phase: 'failed', percent: null, error: code });
       return { ok: false, code };
     }
@@ -359,7 +411,7 @@ export class ReleaseUpdater {
     const work = mkdtempSync(join(dirname(bundle), '.Meetless-update-'));
     try {
       const zip = join(work, 'update.zip');
-      const res = await fetchPinned(`${this.base}/download/${p.tag}/${encodeURIComponent(file.url)}`, this.base, AbortSignal.timeout(30 * 60_000));
+      const res = await fetchPinned(this.fetch, `${this.base}/download/${p.tag}/${encodeURIComponent(file.url)}`, this.base, AbortSignal.timeout(30 * 60_000));
       if (!res.ok || !res.body) throw new UpdateError('UPDATE_DOWNLOAD', `download: HTTP ${res.status}`);
       const length = res.headers.get('content-length');
       if (length !== null && Number(length) !== file.size) throw new UpdateError('UPDATE_DOWNLOAD', `size ${length} is not the manifest's ${file.size}`);

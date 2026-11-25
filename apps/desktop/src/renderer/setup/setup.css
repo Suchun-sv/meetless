@@ -35,3 +35,15 @@
 /* Task 10: rounds. The round fields (title, kind, start, due), shared by the add form and inline edit, wrap on a narrow window. */
 .round-fields{display:flex;align-items:center;gap:var(--space-2);flex:1;flex-wrap:wrap}
 .round-fields .inp{width:auto;flex:1;min-width:120px}
+
+/* Phone (design 2026-11-25 §7): agent cards, tool rows, members and invites fit 390px. */
+@media (max-width: 760px){
+  .ag-grid{grid-template-columns:minmax(0,1fr)}
+  .tool{flex-wrap:wrap;gap:var(--space-2);padding:var(--space-3)}
+  .tool .mono{min-width:0}
+  .member-row,.invite-code-row{flex-wrap:wrap}
+  .sel{min-height:var(--touch-min);font-size:var(--text-lg)}
+  .signin{padding:calc(var(--space-4) + var(--safe-top)) var(--space-4) var(--space-4)}
+  .signin-card{padding:var(--space-5) var(--space-4)}
+  .np-form{max-width:100%}
+}

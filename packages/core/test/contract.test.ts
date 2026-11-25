@@ -35,7 +35,7 @@ const FROZEN_EXPORTS = [
   'currentRound', 'cutoffSeqAtTime', 'dashboardKey', 'daysBetween', 'daysLeft',
   'deliveryCard', 'detectExtracts', 'emptyState', 'eventScope', 'groupByNeed',
   'handoffForNeed', 'handoffStaleness', 'homeItems', 'hypothesesCard', 'inputStatus',
-  'isDomainError', 'isOpen', 'isProgress', 'isSystemActor', 'isWebUrl', 'lastFetchedVersion',
+  'isDomainError', 'isFreeQuestion', 'isOpen', 'isProgress', 'isSystemActor', 'isWebUrl', 'lastFetchedVersion',
   'looksLikeInput', 'matchNeed', 'materialHits', 'membersCard', 'membersOf', 'myProjectIds',
   'needByCode', 'needContext', 'needLink', 'needVersion', 'nextRound',
   'noDots', 'openConflicts', 'openProposals', 'orderBySeq', 'overlap',
@@ -43,7 +43,7 @@ const FROZEN_EXPORTS = [
   'projectInputs', 'projectNeeds', 'projectRounds', 'projectWork', 'projectsCard',
   'questionId', 'questions', 'readableProjectIds', 'refreshPending', 'replay',
   'riskList', 'rolesOf', 'roundFeedback', 'rulesProvider', 'search',
-  'shareableView', 'sourcesCard', 'stateAt', 'stateAtTime', 'suggestions',
+  'shareableView', 'snippet', 'sourcesCard', 'stateAt', 'stateAtTime', 'suggestions',
   'toConfirm', 'toParagraphs', 'tokenSet', 'tokens', 'userName',
   'viewFor', 'waitingCount', 'weeklyCard', 'workFor',
 ];

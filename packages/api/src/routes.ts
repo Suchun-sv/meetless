@@ -28,6 +28,7 @@ export const API_ROUTES = {
   'agentCalls.list': { method: 'GET', path: '/v1/agent-calls', auth: 'user', from: ['app'] },
   'agentSetup.get': { method: 'GET', path: '/v1/agent-setup', auth: 'user', from: ['app'] },
   'agent.guide': { method: 'GET', path: '/v1/agent/guide', auth: 'user', from: ['app'] },
+  'agent.ask': { method: 'POST', path: '/v1/agent/ask', auth: 'user', from: ['app'] },
   'inputs.import': { method: 'POST', path: '/v1/projects/:projectId/inputs', auth: 'user', from: ['app'] },
   'office.config': {
     method: 'GET',

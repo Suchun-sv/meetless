@@ -16,3 +16,8 @@
 .in-hidden-file{display:none}
 /* task 8: the Markdown modal's action row, right-aligned like artifacts' .af-foot. */
 .md-foot{justify-content:flex-end}
+
+/* Phone (design 2026-11-25 §7): the document reads at full width. */
+@media (max-width: 760px){
+  .sheet{padding:0}
+}

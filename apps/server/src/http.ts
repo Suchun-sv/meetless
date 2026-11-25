@@ -6,6 +6,7 @@ import { isDomainError, type Id, type Seq } from '@meetless/core';
 import { WEB_SESSION_COOKIE } from '@meetless/api';
 import { ApiError, authenticateRequest, errorResponse, registerApiRoutes, requireUserPrincipal, type ApiDeps } from './api/index';
 import { RateLimiter } from './api/ratelimit';
+import { printUsage, ProjectAi } from './agents/deepseek';
 import { loadSkillMarkdown, skillPathFromEnv } from './accounts/guide';
 import { registerMcp } from './mcp/server';
 import { bearerToken, isAuthFailure, type Principal } from './auth';
@@ -107,7 +108,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     signIn: new RateLimiter(cfg.rateLimits.signIn, () => cfg.now().getTime()),
     redeem: new RateLimiter(cfg.rateLimits.redeem, () => cfg.now().getTime()),
   };
-  const deps: ApiDeps = { service, accounts: opts.accounts, auth, cfg, rateLimits, skillMarkdown };
+  const ai = opts.ai ?? new ProjectAi(cfg.ai ?? null, { now: cfg.now, log: printUsage });
+  const deps: ApiDeps = { service, accounts: opts.accounts, auth, cfg, rateLimits, skillMarkdown, ai };
   // One OfficeViewer per server, so its 30s availability cache actually caches across requests.
   deps.officeViewer = new OfficeViewer(deps, opts.officeTickets ?? new OfficeTickets(), opts.officeFetch);
 

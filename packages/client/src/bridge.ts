@@ -92,6 +92,8 @@ export interface UpdateState {
   /** Download progress 0-100, when known. */
   percent: number | null;
   error: string | null;
+  /** `UPDATE_CHECK` when the last check failed (network, proxy, timeout); the UI offers a retry. */
+  checkError?: string | null;
 }
 
 /** A local git repository the user chose. Never carries the local path. */

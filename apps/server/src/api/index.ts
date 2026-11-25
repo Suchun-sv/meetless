@@ -3,6 +3,7 @@ import { API_ROUTES, type ApiName } from '@meetless/api';
 import { agentGuideGet } from '../accounts/guide';
 import { ApiError, defineRoute, type ApiDeps, type Handler } from './frame';
 import { ACCOUNT_HANDLERS } from './routes-accounts';
+import { AGENT_HANDLERS } from './routes-agent';
 import { TOKEN_HANDLERS } from './routes-tokens';
 import { INPUT_HANDLERS } from './routes-inputs';
 import { OFFICE_HANDLERS } from './routes-office';
@@ -29,7 +30,8 @@ const me: Handler<'me'> = async ({ p, deps }) => {
   const u = Object.prototype.hasOwnProperty.call(deps.service.current.users, p.userId) ? deps.service.current.users[p.userId]! : null;
   // A token whose user was never registered cannot act as anyone.
   if (!u) throw new ApiError('UNAUTHENTICATED');
-  return { user: { id: u.id, displayName: u.displayName, locale: u.locale }, devAuth: deps.cfg.devAuth };
+  const ai = deps.ai?.enabled ? { enabled: true, provider: deps.ai.provider } : { enabled: false, provider: null };
+  return { user: { id: u.id, displayName: u.displayName, locale: u.locale }, devAuth: deps.cfg.devAuth, ai };
 };
 
 /**
@@ -40,6 +42,7 @@ export const HANDLERS: Partial<{ [K in ApiName]: Handler<K> }> = {
   me,
   'agent.guide': agentGuideGet,
   ...ACCOUNT_HANDLERS,
+  ...AGENT_HANDLERS,
   ...TOKEN_HANDLERS,
   ...INPUT_HANDLERS,
   ...OFFICE_HANDLERS,
