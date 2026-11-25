@@ -1,0 +1,26 @@
+/* Rounds gantt with the today line (Timeline). Base-owned. Ported from needs2/v2.css "Timeline"
+   with the v4 values. Inline styles on these elements carry geometry only (left, width). */
+.tl{margin:var(--space-1) var(--space-6) 0;padding:var(--space-3) var(--space-4) var(--space-2);background:var(--color-sidebar);border:var(--border);border-radius:var(--radius-lg)}
+.tl-grid{position:relative;padding:0 var(--space-1)}
+.tl-axis{position:relative;height:18px}
+.tl-wk{position:absolute;transform:translateX(-50%);font-size:var(--text-xs);color:var(--color-text-tertiary);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tl-wk-today{color:var(--color-text);font-weight:var(--weight-semibold);background:var(--color-sidebar);padding:0 var(--space-2);z-index:4}
+.tl-rows{position:relative;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-2) 0 0}
+.tl-row{position:relative;height:22px}
+.tl-bar{position:absolute;top:0;height:22px;border-radius:var(--radius-sm);border:var(--border-width) solid transparent;background:transparent;color:inherit;cursor:pointer;padding:0 var(--space-3);text-align:left;overflow:hidden;display:flex;align-items:center;transition:background-color var(--duration-fast) var(--ease-standard)}
+.tl-bar-t{font-size:var(--text-xs);line-height:var(--leading-tight);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-bar-out{position:absolute;top:2px;margin-left:var(--space-3);font-size:var(--text-xs);color:var(--color-text-secondary);white-space:nowrap;pointer-events:none}
+.b-delivered{background:var(--color-selected);color:var(--color-text-secondary)}
+.b-delivered:hover{background:var(--color-border-strong)}
+.b-current{background:var(--color-text);color:var(--color-text-inverse)}
+.b-planned{background:transparent;border:var(--border-width) dashed var(--color-border-strong);color:var(--color-text-tertiary)}
+.tl-bar.on{outline:calc(var(--border-width) * 2) solid var(--color-text);outline-offset:var(--border-width)}
+/* Round milestones: a diamond on the due date (a deadline is red, a check-in is outlined). */
+.tl-ms{position:absolute;top:6px;width:10px;height:10px;margin-left:calc(var(--space-1) * -1.25);z-index:2;display:inline-block}
+.tl-ms.static{position:static;margin:0;flex:none}
+.ms-hard{transform:rotate(45deg);background:var(--color-danger);border-radius:0}
+.ms-cadence{transform:rotate(45deg);background:var(--color-sidebar);border:calc(var(--border-width) * 1.5) solid var(--color-text-secondary);border-radius:0}
+.ms-hard.s-planned,.ms-cadence.s-planned{opacity:.45}
+.tl-today{position:absolute;top:0;bottom:0;width:0;border-left:var(--border-width) solid var(--color-text);z-index:3;pointer-events:none}
+.tl-foot{display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-2);font-size:var(--text-xs)}
+.legend{display:inline-flex;align-items:center;gap:var(--space-2);color:var(--color-text-tertiary)}

@@ -1,0 +1,28 @@
+{
+  "name": "@meetless/client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Client sync engine (Node side of the desktop app): WebSocket sync with resume, outbox, SQLite local cache, blob cache. `./bridge` holds the renderer-safe bridge types.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bridge": "./src/bridge.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@meetless/api": "workspace:*",
+    "@meetless/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

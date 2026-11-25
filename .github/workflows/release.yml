@@ -1,0 +1,138 @@
+# Installers for macOS, Windows and Linux, built on GitHub's machines. Adapted from Gleeok's
+# .github/workflows/release.yml (same author), without its castLabs EVS steps: Meetless uses stock Electron.
+#
+# Push a tag like v0.2.0: the version comes from the tag, a draft release collects the three builds
+# and is published once all three succeed (the in-app updater then offers it). Run it by hand
+# (Actions, Release, Run workflow) to build without publishing; the files are kept as artifacts.
+#
+# Secrets (Settings, Secrets and variables, Actions), see docs/RELEASE.md:
+#   MAC_CERT_P12, MAC_CERT_PASSWORD  a self-signed code-signing certificate (base64 PKCS#12, named
+#                                  "Meetless Self-Signed"): every version keeps the same identity, so
+#                                  the macOS keychain keeps trusting the app across updates. Tags
+#                                  require it; a hand-run build without it is signed ad hoc.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Draft release for the tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft --title "Meetless ${GITHUB_REF_NAME#v}" --generate-notes
+
+  build:
+    needs: draft
+    # A tag waits for its draft; a hand-run build has none to wait for.
+    if: always() && (needs.draft.result == 'success' || needs.draft.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac
+          - os: windows-latest
+            target: --win
+          - os: ubuntu-latest
+            target: --linux
+    runs-on: ${{ matrix.os }}
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # The version comes from package.json's packageManager field (pnpm 12).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Version from the tag
+        if: env.RELEASE == 'true'
+        working-directory: apps/desktop
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));p.version=process.argv[1];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")' "$v"
+          grep '"version"' package.json
+
+      - run: pnpm install --frozen-lockfile
+      # Main + preload (esbuild) and renderer (Vite), then the staged app dir electron-builder packs.
+      - name: Build and stage
+        working-directory: apps/desktop
+        run: |
+          pnpm run build
+          node scripts/stage-app.mjs
+
+      - name: Code-signing certificate (macOS)
+        if: runner.os == 'macOS' && env.MAC_CERT_P12 != ''
+        env:
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/meetless.keychain-db"
+          security create-keychain -p ci "$kc"
+          security set-keychain-settings "$kc"
+          security unlock-keychain -p ci "$kc"
+          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
+          security import "$RUNNER_TEMP/id.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          # Trusted for code signing, or codesign will not use a self-signed identity.
+          security find-certificate -c "Meetless Self-Signed" -p "$kc" > "$RUNNER_TEMP/cert.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
+          echo "MAC_SIGN_IDENTITY=Meetless Self-Signed" >> "$GITHUB_ENV"
+          echo "MAC_SIGN_KEYCHAIN=$kc" >> "$GITHUB_ENV"
+
+      - name: A release is signed with the Meetless identity
+        if: runner.os == 'macOS' && env.RELEASE == 'true' && env.MAC_CERT_P12 == ''
+        run: |
+          echo "MAC_CERT_P12 is not set: a release must carry the Meetless Self-Signed identity (docs/RELEASE.md)" >&2
+          exit 1
+
+      - name: Package
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm exec electron-builder ${{ matrix.target }} --config electron-builder.config.cjs --publish "$([ "$RELEASE" = true ] && echo always || echo never)"
+
+      - name: Signature (macOS)
+        if: runner.os == 'macOS'
+        working-directory: apps/desktop
+        run: for app in release/dist/mac*/Meetless.app; do codesign -dv "$app" 2>&1 | grep -E 'Identifier|Authority|Signature' || true; done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meetless-${{ runner.os }}
+          if-no-files-found: warn
+          path: |
+            apps/desktop/release/dist/*.zip
+            apps/desktop/release/dist/*.dmg
+            apps/desktop/release/dist/*.exe
+            apps/desktop/release/dist/*.AppImage
+            apps/desktop/release/dist/*.blockmap
+            apps/desktop/release/dist/*.yml
+            !apps/desktop/release/dist/builder-debug.yml
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest

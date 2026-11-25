@@ -1,0 +1,89 @@
+/* U1 home and dashboards. Ported from needs3/dash.css (cards and grid) and needs3/v3.css "Home",
+   with the v4 values. Tokens only. Risk rows use the .tone-* classes (riskTone). */
+
+/* Home */
+.home{max-width:1040px;margin:0 auto;padding:6vh var(--space-8) calc(var(--space-8) * 2);display:flex;flex-direction:column;align-items:center;gap:var(--space-2)}
+.home-hero{text-align:center;display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-3)}
+.home-hero h1,.home-hero2 h1{font-size:var(--text-2xl);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-tight);line-height:var(--leading-tight)}
+.home .composer-wrap{width:100%}
+.home-grid{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4);margin-top:var(--space-4)}
+.hcard{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-4) var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);min-width:0;background:var(--color-bg)}
+.hcard h3{font-size:var(--text-sm);color:var(--color-text);font-weight:var(--weight-semibold);margin:0 calc(var(--space-1) / 2) calc(var(--space-1) / 2)}
+.hc-n{margin-left:var(--space-2);color:var(--color-text-tertiary);font-weight:var(--weight-medium)}
+.hrow{display:flex;align-items:center;gap:var(--space-2);border:0;background:transparent;border-radius:var(--radius-md);padding:var(--space-2);cursor:pointer;text-align:left;width:100%;color:inherit}
+.hrow:hover{background:var(--color-sidebar)}
+.hrow-t{font-size:var(--text-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hitem{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-2);border-radius:var(--radius-md);background:var(--color-sidebar);text-align:left;border:0;width:100%;color:inherit}
+.hbtn{cursor:pointer}
+.hbtn:hover{background:var(--color-hover)}
+.hlink{border:0;background:none;padding:0;text-align:left;font-size:var(--text-base);font-weight:var(--weight-medium);cursor:pointer;color:inherit}
+.hlink:hover{text-decoration:underline}
+.ptag{font-size:var(--text-xs);color:var(--color-text-secondary);background:var(--color-bg);border:var(--border);border-radius:var(--radius-sm);padding:0 var(--space-1);white-space:nowrap;flex:none}
+.warn{color:var(--color-danger)}
+
+/* Dashboards (project and home) */
+.dash{max-width:1120px;margin:0 auto;padding:var(--space-5) var(--space-6) 0;display:flex;flex-direction:column;gap:var(--space-4);min-height:100%}
+.home-hero2{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);padding:3vh 0 var(--space-1);text-align:center}
+.home-hero2 .composer-wrap{width:100%;max-width:var(--layout-content);margin-top:var(--space-2)}
+.dash > .composer-wrap{margin:0 calc(var(--space-6) * -1)}
+.dash-setup{display:flex;gap:var(--space-2);align-items:center;padding:var(--space-2) var(--space-3);border:var(--border);border-radius:var(--radius-md);background:var(--color-sidebar)}
+.dash-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4);align-items:start}
+.wg{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4) var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);background:var(--color-bg);min-width:0}
+.wg.wide{grid-column:span 2}
+.wg-h{display:flex;align-items:center;gap:var(--space-2)}
+.wg-h h3{font-size:var(--text-sm);color:var(--color-text);font-weight:var(--weight-semibold);margin:0}
+.wg-meta{font-size:var(--text-xs);color:var(--color-text-tertiary)}
+.wg-act{border:0;background:none;color:var(--color-text-tertiary);font-size:var(--text-xs);cursor:pointer;padding:calc(var(--space-1) / 2) var(--space-2);border-radius:var(--radius-sm);opacity:0;transition:opacity var(--duration-fast) var(--ease-standard),background-color var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard)}
+.wg:hover .wg-act,.wg:focus-within .wg-act{opacity:1}
+.wg-act:hover{background:var(--color-hover);color:var(--color-text)}
+.nlink{display:inline-flex;align-items:center;gap:var(--space-2);border:0;background:var(--color-surface);border-radius:var(--radius-sm);padding:calc(var(--space-1) / 2) var(--space-2);font-size:var(--text-xs);cursor:pointer;max-width:280px;flex:none;color:inherit}
+.nlink:hover{background:var(--color-hover)}
+.nlink-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar2{height:6px;border-radius:var(--radius-sm);background:var(--color-surface);overflow:hidden;min-width:60px}
+/* A bar, never a dot: the fill keeps a minimum width so a near-0% value still reads as a bar. */
+.bar2-f{height:100%;min-width:var(--space-3);background:var(--color-text);border-radius:var(--radius-sm)}
+.pg{display:flex;flex-direction:column;gap:var(--space-3)}
+/* A card's empty state: the missing thing, then one way forward (base .btn.btn-sm). */
+.wg-empty{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-2)}
+.pg-top{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3)}
+.pg-big{font-size:var(--text-2xl);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-tight);line-height:var(--leading-tight);font-variant-numeric:tabular-nums}
+.pg-row{display:flex;gap:var(--space-4);flex-wrap:wrap;font-size:var(--text-xs);color:var(--color-text-secondary)}
+.tl-ms.big{width:14px;height:14px;margin-top:var(--space-2)}
+.rk{display:flex;flex-direction:column;gap:var(--space-2)}
+.rk-i{display:flex;align-items:center;gap:var(--space-2);border:0;background:var(--color-sidebar);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);text-align:left;cursor:pointer;font-size:var(--text-sm);color:var(--color-text-secondary)}
+.rk-i:hover{background:var(--color-hover)}
+.mb{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--space-2)}
+.mb-i{display:flex;gap:var(--space-2);align-items:flex-start;padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);background:var(--color-sidebar);min-width:0}
+.mb-i .grow{min-width:0}
+.mb-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mb-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mb-m{flex:none;white-space:nowrap}
+.dl-i{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-1) 0;border-bottom:var(--border)}
+.dl-i:last-child{border-bottom:0}
+.hy-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2)}
+.hy-c{display:flex;flex-direction:column;align-items:flex-start;padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);background:var(--color-sidebar)}
+.hy-n{font-size:var(--text-xl);font-weight:var(--weight-semibold);color:var(--color-text);letter-spacing:var(--tracking-tight);font-variant-numeric:tabular-nums}
+.act{display:flex;flex-direction:column}
+.act-i{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-1);border-bottom:var(--border);min-width:0}
+.act-i:last-child{border-bottom:0}
+.act-d{width:60px;flex:none}
+.act-t{font-size:var(--text-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsrc.sm{min-width:20px;height:20px;font-size:var(--text-xs);border-radius:var(--radius-sm)}
+.src-i{display:flex;align-items:center;gap:var(--space-2)}
+.src-n{width:170px;font-size:var(--text-sm);flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Project cards */
+.pj{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-3)}
+.pj-i{display:flex;flex-direction:column;gap:var(--space-2);border:var(--border);background:var(--color-bg);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);text-align:left;cursor:pointer;color:inherit}
+.pj-i:hover{border-color:var(--color-border-strong)}
+
+/* Motion: project cards lift 2px and take --shadow-sm, only with a fine pointer */
+.hrow,.hbtn,.nlink,.rk-i,.pj-i{transition:background-color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard),box-shadow var(--duration-normal) var(--ease-standard),transform var(--duration-normal) var(--ease-standard)}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference){
+  .pj-i:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+}
+
+@media (max-width:1200px){
+  .home-grid,.dash-grid{grid-template-columns:minmax(0,1fr)}
+  .wg.wide{grid-column:auto}
+}

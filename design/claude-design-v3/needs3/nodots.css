@@ -1,0 +1,10 @@
+/* No dot markers: status, pills and AI marks use coloured text instead of a leading dot. */
+.pill::before{display:none}
+.pill{padding:2px 9px}
+.p-blue{color:var(--blue)} .p-green{color:var(--green)} .p-amber{color:oklch(0.52 0.12 65)} .p-violet{color:var(--violet)} .p-gray{color:var(--ink2)}
+.p-ink{background:var(--ink);color:#fff}
+.st{font-weight:500}
+.st i{display:none}
+.st.t-gray{color:var(--ink3)} .st.t-blue{color:var(--blue)} .st.t-green{color:var(--green)} .st.t-amber{color:oklch(0.55 0.12 65)} .st.t-violet{color:var(--violet)} .st.t-muted{color:var(--ink3);text-decoration:line-through}
+.ai-dot{display:none}
+.hc-n{margin-left:8px;color:var(--ink3);font-weight:500}

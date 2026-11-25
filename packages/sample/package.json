@@ -1,0 +1,23 @@
+{
+  "name": "@meetless/sample",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The prototype's sample projects (the paper and Atlas) as real core commands",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@meetless/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

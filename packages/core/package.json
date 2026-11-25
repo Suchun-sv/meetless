@@ -1,0 +1,23 @@
+{
+  "name": "@meetless/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Event-sourced, language-independent domain model for Meetless",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "immer": "^11.2.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

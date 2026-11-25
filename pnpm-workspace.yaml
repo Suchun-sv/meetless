@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# Dependencies allowed to run install scripts (pnpm blocks all others).
+# electron: downloads its binary; esbuild: platform binary used by vite/tsx.
+# electron-winstaller: Windows-only peer of electron-builder, never used (mac arm64 only); script stays blocked.
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: false

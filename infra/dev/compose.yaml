@@ -1,0 +1,81 @@
+# Meetless development/test dependencies (rootless Docker on the dev server).
+# Every resource is named meetless-* and every port is bound to 127.0.0.1 only.
+# Use infra/dev/deps.sh (start | stop | status | reset | psql) rather than calling compose directly.
+name: meetless-dev
+
+services:
+  meetless-pg:
+    image: postgres:16-alpine
+    container_name: meetless-pg
+    environment:
+      POSTGRES_USER: meetless
+      POSTGRES_PASSWORD: meetless-dev-only
+      POSTGRES_DB: meetless
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - meetless-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meetless -d meetless"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+
+  # LibreOffice + python-pptx/python-docx conversion service (PPTX/DOCX previews and anchors).
+  meetless-office:
+    build:
+      context: ./office
+    image: meetless-office:dev
+    container_name: meetless-office
+    ports:
+      - "127.0.0.1:55434:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+      - /home/office:size=256m
+    restart: "no"
+
+  # OnlyOffice DocumentServer, read-only viewing of artifacts (U3). Started only by infra/dev/onlyoffice/onlyoffice.mjs.
+  meetless-onlyoffice:
+    image: onlyoffice/documentserver:8.3
+    container_name: meetless-onlyoffice
+    profiles: ["onlyoffice"]
+    ports:
+      - "127.0.0.1:55435:80"
+    env_file:
+      - path: ./onlyoffice/.env.local
+        required: false
+    environment:
+      JWT_ENABLED: "true"
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    restart: "no"
+
+  # Relay for DocumentServer's file fetches (U3, contract 12.6): TCP 8080 inside meetless-dev-net to the
+  # server's Unix socket <dataDir>/office-sock/files.sock. No published port. Container root is the host
+  # user under rootless Docker, the only user that may open the 0600 socket. Started only by onlyoffice.mjs.
+  meetless-onlyoffice-files:
+    image: meetless-office:dev
+    pull_policy: never
+    container_name: meetless-onlyoffice-files
+    profiles: ["onlyoffice"]
+    user: "0:0"
+    command: ["python3", "/opt/relay/relay.py"]
+    volumes:
+      - "${MEETLESS_OFFICE_SOCK_DIR:-../../.data/u3/server/office-sock}:/run/meetless:ro"
+      - "./onlyoffice/relay.py:/opt/relay/relay.py:ro"
+    read_only: true
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 8080), 2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: "no"
+
+volumes:
+  meetless-pg-data:
+    name: meetless-pg-data
+
+networks:
+  default:
+    name: meetless-dev-net

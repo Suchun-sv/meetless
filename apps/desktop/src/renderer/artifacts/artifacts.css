@@ -1,0 +1,37 @@
+/* U3 artifacts: document frame, code diff, Notion page, versions. Ported from needs2/v2.css
+   "Inputs & artifacts: three panes" (.oo*, .af-h, .codebox, .notion*, .diff*, .tbl*, .ver*),
+   with the v4 values. Tokens only. Violet only on rule detection hits (.oo-b.hit, .oo-b.hit.on, .oo-tag).
+   Task 6 adds the real OnlyOffice host (.oo-host) and the LibreOffice fallback's page marker
+   (.oo-page.on): both neutral (no violet; violet is reserved for AI and rule output). */
+.af-h{margin-bottom:var(--space-3)}
+.oo,.codebox,.notion{border:var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--color-bg)}
+.oo-bar{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-bottom:var(--border);font-size:var(--text-sm);background:var(--color-bg)}
+.oo-logo{font-family:var(--font-mono);font-size:var(--text-xs);font-weight:var(--weight-semibold);letter-spacing:0;color:var(--color-text-secondary);background:var(--color-surface);padding:calc(var(--space-1) / 2) var(--space-2);border-radius:var(--radius-sm)}
+.oo-name{font-weight:var(--weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oo-host{height:70vh;min-height:480px;background:var(--color-surface)}
+.oo-canvas{background:var(--color-surface);padding:var(--space-6);display:flex;flex-direction:column;align-items:center;gap:var(--space-5)}
+.oo-page{position:relative;width:min(620px,100%);min-height:400px;background:var(--color-bg);border:var(--border);border-radius:var(--radius-sm);padding:var(--space-12);display:flex;flex-direction:column;gap:var(--space-3);font-family:var(--font-sans)}
+.oo-page.slide{aspect-ratio:16/9;min-height:0;padding:var(--space-8) var(--space-10)}
+.oo-page.on{border-color:var(--color-text)}
+.oo-page img{max-width:100%;border-radius:var(--radius-sm)}
+.oo-b{font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--color-text);padding:calc(var(--space-1) / 2) var(--space-1)}
+.oo-b.hit{text-decoration:underline;text-decoration-style:solid;text-decoration-thickness:var(--border-width);text-decoration-color:var(--color-ai);text-underline-offset:var(--space-1)}
+.oo-b.on{background:var(--color-selected);border-radius:var(--radius-sm)}
+.oo-b.hit.on{background:var(--color-ai-bg)}
+.oo-h{font-size:var(--text-xl);font-weight:var(--weight-semibold);line-height:var(--leading-tight)}
+.oo-fig,.oo-tbl{height:92px;border-radius:var(--radius-md);background:var(--color-sidebar);border:var(--border-width) dashed var(--color-border-strong);display:flex;align-items:center;justify-content:center;gap:var(--space-2);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-text-tertiary)}
+.oo-tag{display:inline-block;margin-left:var(--space-2);font-family:var(--font-mono);font-size:var(--text-xs);padding:0 var(--space-1);border-radius:var(--radius-sm);background:var(--color-ai-bg);color:var(--color-ai);text-decoration:none;vertical-align:1px}
+.oo-pn{position:absolute;right:16px;bottom:10px;font-size:var(--text-xs);color:var(--color-text-tertiary);font-family:var(--font-sans)}
+.diff{margin:0;padding:var(--space-3) 0;font-family:var(--font-mono);font-size:var(--text-xs);line-height:var(--leading-normal);overflow:auto;background:var(--color-sidebar)}
+.diff div{padding:0 var(--space-4);white-space:pre}
+.diff .add{background:var(--color-success-bg);color:var(--color-success)}
+.diff .del{background:var(--color-danger-bg);color:var(--color-danger)}
+.diff .hunk{color:var(--color-text-tertiary)}
+.notion-p{padding:var(--space-8) var(--space-10);display:flex;flex-direction:column;gap:var(--space-4)}
+.tbl{border-collapse:collapse;width:100%;font-size:var(--text-sm)}
+.tbl td{border-bottom:var(--border);padding:var(--space-2) var(--space-1)}
+.ver{display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);border:var(--border);background:var(--color-bg);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);cursor:pointer;text-align:left;color:inherit;transition:background-color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard)}
+.ver:hover{background:var(--color-sidebar)}
+.ver.on{border-color:var(--color-text)}
+.af-foot{justify-content:flex-end}
+.src{border:var(--border);border-radius:var(--radius-lg);background:var(--color-bg);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)}

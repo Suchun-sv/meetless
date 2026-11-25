@@ -1,0 +1,18 @@
+/* U3 inputs: the document sheet with detected paragraphs and the extract cards. Ported from
+   needs2/v2.css "Inputs & artifacts: three panes" (.sheet, .para*, .xc*), with the v4 values.
+   Tokens only. Violet only on rule detection hits (.para.hit, and .para.hit.on when selected; a selected
+   paragraph that is not a hit is neutral). */
+.sheet{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-2) 0}
+.sheet .para{margin:var(--space-1) 0;font-size:var(--text-md);line-height:var(--leading-normal)}
+.para.hit{text-decoration:underline;text-decoration-style:solid;text-decoration-thickness:var(--border-width);text-decoration-color:var(--color-ai);text-underline-offset:var(--space-1)}
+.para.on{background:var(--color-selected);border-radius:var(--radius-sm)}
+.para.hit.on{background:var(--color-ai-bg)}
+.xc{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);background:var(--color-bg)}
+.xc.accepted{background:var(--color-sidebar);border-color:transparent}
+.xc.ignored{opacity:.45}
+.xc-t{font-size:var(--text-base);line-height:var(--leading-normal)}
+.in-x-footer{margin-top:var(--space-2)}
+/* task 8: the hidden native file input behind the "Import file" button (never an inline display style). */
+.in-hidden-file{display:none}
+/* task 8: the Markdown modal's action row, right-aligned like artifacts' .af-foot. */
+.md-foot{justify-content:flex-end}

@@ -1,0 +1,22 @@
+{
+  "name": "@meetless/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "description": "zh-CN / en UI resources and a typed translator with fallback",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./resources/*": "./resources/*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@meetless/api": "workspace:*",
+    "@meetless/core": "workspace:*",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

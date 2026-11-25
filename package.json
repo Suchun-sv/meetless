@@ -1,0 +1,21 @@
+{
+  "name": "meetless",
+  "private": true,
+  "description": "Meetless — desktop team collaboration around requirements, artifacts, changes and decisions",
+  "packageManager": "pnpm@12.23.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:electron": "node scripts/dev.mjs --electron",
+    "block": "node scripts/block.mjs",
+    "deps": "bash infra/dev/deps.sh",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @meetless/desktop test:e2e",
+    "test:blocks": "node --test scripts/blocks.test.mjs",
+    "onlyoffice": "node infra/dev/onlyoffice/onlyoffice.mjs"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

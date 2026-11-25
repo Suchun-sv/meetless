@@ -1,0 +1,37 @@
+/* U1 setup pages: agents. Ported from needs2/v2.css "Agents", with the v4 values. Tokens only. */
+.ag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:var(--space-4)}
+.ag{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);background:var(--color-bg)}
+.ag-logo{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:var(--radius-md);font-size:var(--text-xs);font-weight:var(--weight-semibold);color:var(--color-text-inverse);flex:none}
+.ag-logo.sm{width:22px;height:22px;border-radius:var(--radius-sm)}
+.ag-cc{background:var(--color-avatar-1)}
+.ag-codex{background:var(--color-text)}
+.snip{margin:0;padding:var(--space-3);border-radius:var(--radius-md);background:var(--color-sidebar);color:var(--color-text);border:var(--border);font-family:var(--font-mono);font-size:var(--text-xs);line-height:var(--leading-normal);white-space:pre-wrap;word-break:break-all}
+.tools{display:flex;flex-direction:column;border:var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.tool{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:var(--border)}
+.tool:last-child{border-bottom:0}
+.tool .mono{min-width:150px}
+.h3{font-size:var(--text-base);color:var(--color-text);font-weight:var(--weight-semibold);margin:var(--space-4) 0 var(--space-1)}
+
+/* Base skeleton (Task 11): sign-in card and the new project form. Tokens only. */
+/* Task 8: the invite form and the dev-token form share the card; the dev form sits below a rule. */
+.signin{min-height:100%;display:flex;align-items:center;justify-content:center;padding:var(--space-6);background:var(--color-sidebar)}
+.signin-card{width:min(440px,100%);display:flex;flex-direction:column;gap:var(--space-4);background:var(--color-bg);border:var(--border);border-radius:var(--radius-xl);padding:var(--space-6)}
+.signin-card p{margin:0}
+.signin-field{display:flex;flex-direction:column;gap:var(--space-1)}
+.signin-form{display:flex;flex-direction:column;gap:var(--space-3)}
+.signin-dev{border-top:var(--border);padding-top:var(--space-4)}
+.np-form{display:flex;align-items:center;gap:var(--space-2);max-width:520px;flex-wrap:wrap}
+
+/* Task 9: members, roles and invite codes. Tokens only. */
+.sel{flex:1;min-width:0;border:var(--border-strong);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);font:inherit;font-size:var(--text-base);background:var(--color-bg);color:var(--color-text)}
+.sel:focus{border-color:var(--color-focus)}
+.member-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:var(--border)}
+.member-row:last-child{border-bottom:0}
+.member-roles{display:flex;gap:var(--space-2);flex-wrap:wrap}
+.pill-rm{border:0;background:none;color:inherit;cursor:pointer;padding:0;margin-left:var(--space-1);font-size:var(--text-xs)}
+.setup-invites{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4)}
+.invite-code-row{display:flex;align-items:center;gap:var(--space-3)}
+
+/* Task 10: rounds. The round fields (title, kind, start, due), shared by the add form and inline edit, wrap on a narrow window. */
+.round-fields{display:flex;align-items:center;gap:var(--space-2);flex:1;flex-wrap:wrap}
+.round-fields .inp{width:auto;flex:1;min-width:120px}

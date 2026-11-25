@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+# local runtime data (server blobs, client caches, dev bridge data dirs)
+.data/
+# Playwright output
+test-results/
+playwright-report/
+# electron-builder staging dir and artifacts (apps/desktop/release)
+release/
+# project-local caches used for the macOS build (docs/MACOS.md)
+.cache/

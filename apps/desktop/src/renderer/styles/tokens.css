@@ -1,0 +1,96 @@
+/* Meetless design tokens (contract §8). Values approved by the user on 2026-11-24:
+   docs/superpowers/specs/2026-11-24-meetless-v3-visual-tokens.md.
+   This file defines exactly TOKEN_NAMES (styles/token-names.ts) and nothing else.
+   Fonts are declared in styles/fonts.css. */
+:root {
+  /* colour: surfaces */
+  --color-bg: #FBFBFA;
+  --color-sidebar: #F5F4F0;
+  --color-surface: #F2F1ED;
+  --color-hover: #EDECE8;
+  --color-selected: #E7E6E1;
+  --color-scrim: rgba(28,27,25,.22);
+  /* colour: text */
+  --color-text: #1C1B19;
+  --color-text-secondary: #787774;
+  --color-text-tertiary: #9B9A96;
+  --color-text-inverse: #FFFFFF;
+  /* colour: lines */
+  --color-border: #EAEAEA;
+  --color-border-strong: #D8D7D3;
+  --color-focus: #1C1B19;
+  /* colour: AI (violet, reserved for AI and rule output) */
+  --color-ai: #6A4FA3;
+  --color-ai-bg: #F1EDF8;
+  /* colour: status (dark text on a pastel tint) */
+  --color-info: #1F6C9F;
+  --color-info-bg: #E7F1F8;
+  --color-success: #346538;
+  --color-success-bg: #EDF3EC;
+  --color-warning: #956400;
+  --color-warning-bg: #FBF3DB;
+  --color-danger: #9F2F2D;
+  --color-danger-bg: #FDEBEC;
+  /* colour: avatars */
+  --color-avatar-1: #B07D57;
+  --color-avatar-2: #5A7DA3;
+  --color-avatar-3: #A5698A;
+  --color-avatar-4: #5C8868;
+  --color-avatar-5: #4D878C;
+  --color-avatar-6: #8A7657;
+  --color-avatar-7: #7B8A4B;
+  --color-avatar-8: #8C8A85;
+  /* type */
+  --font-sans: "Geist","SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono: "Geist Mono","JetBrains Mono","SF Mono",ui-monospace,Menlo,"PingFang SC","Noto Sans SC",monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --leading-tight: 1.25;
+  --leading-normal: 1.6;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-tight: -0.02em;
+  /* spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  /* border */
+  --border-width: 1px;
+  --border: var(--border-width) solid var(--color-border);
+  --border-strong: var(--border-width) solid var(--color-border-strong);
+  /* shadow */
+  --shadow-sm: 0 2px 8px rgba(28,27,25,.04);
+  --shadow-md: 0 4px 16px rgba(28,27,25,.05);
+  --shadow-lg: 0 16px 40px rgba(28,27,25,.08);
+  /* layout */
+  --layout-sidebar: 260px;
+  --layout-drawer: 420px;
+  --layout-topbar: 56px;
+  --layout-content: 768px;
+  /* motion */
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --ease-standard: cubic-bezier(.2,.8,.2,1);
+  /* stacking */
+  --z-drawer: 20;
+  --z-modal: 50;
+  --z-toast: 60;
+}

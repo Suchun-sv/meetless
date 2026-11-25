@@ -1,0 +1,39 @@
+{
+  "name": "@meetless/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Meetless sync service: validated, server-ordered event log (PostgreSQL), content-addressed blobs, WebSocket push",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@meetless/api": "workspace:*",
+    "@meetless/core": "workspace:*",
+    "@meetless/i18n": "workspace:*",
+    "@meetless/sample": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "fastify": "^5.12.8",
+    "mammoth": "^1.13.0",
+    "pg": "^8.23.1",
+    "unpdf": "^2.2.2",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@meetless/client": "workspace:*",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

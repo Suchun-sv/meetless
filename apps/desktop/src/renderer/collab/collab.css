@@ -1,0 +1,36 @@
+/* U2 "To confirm", handoff and link modals. Ported from needs2/v2.css "Modals" (.q*, .ok,
+   .empty-ask; the dialog itself is the base .modal) and needs3/v3.css "Handoff + link modals",
+   with the v4 values. Tokens only. */
+.q{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-2)}
+.q-t{font-size:var(--text-base);font-weight:var(--weight-medium);line-height:var(--leading-normal)}
+.q-opts{display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-1)}
+.q-opts .btn{justify-content:flex-start;padding:var(--space-2) var(--space-3);font-weight:var(--weight-regular);color:var(--color-text)}
+.q.done{background:var(--color-sidebar);border-color:transparent;gap:calc(var(--space-1) / 2)}
+.q.qc{border-color:color-mix(in srgb, var(--color-warning) 30%, var(--color-border))}
+.q .pill{align-self:flex-start}
+.ok{color:var(--color-success)}
+.empty-ask{padding:var(--space-6);text-align:center;color:var(--color-text-tertiary)}
+
+/* Prompt preview, people picker, conflict sides */
+.pbox{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);background:var(--color-sidebar)}
+.pbox-p{margin:0;font-family:var(--font-mono);font-size:var(--text-xs);line-height:var(--leading-normal);white-space:pre-wrap;background:var(--color-bg);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);border:var(--border)}
+.pbox .mono-ta{min-height:240px;background:var(--color-bg)}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--space-2)}
+.person{display:flex;align-items:center;gap:var(--space-2);border:var(--border);background:var(--color-bg);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);cursor:pointer;text-align:left;color:inherit;transition:background-color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard)}
+.person:hover{background:var(--color-sidebar)}
+.person.on{border-color:var(--color-text)}
+.person .grow{min-width:0}
+.person-n{display:block;font-size:var(--text-base);font-weight:var(--weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person-r{display:block;font-size:var(--text-xs);color:var(--color-text-tertiary)}
+.cf{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)}
+.cf-b{border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);background:var(--color-sidebar);font-size:var(--text-sm);display:flex;flex-direction:column;gap:var(--space-1)}
+.cf-b.neu{background:var(--color-warning-bg)}
+
+/* Handoff modal footer: Cancel and Send, right-aligned (collab/HandoffModal). */
+.ho-foot{justify-content:flex-end}
+
+/* To confirm: the three conflict options read as equal boxes with solid text: revise and hand off
+   are .btn rows, and keep-and-park is a box of the same weight holding its round chips. */
+.q-park{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);border:var(--border);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);color:var(--color-text);background:var(--color-bg)}
+.q-pick{display:flex;flex-direction:column;gap:var(--space-2);border:var(--border);border-radius:var(--radius-md);padding:var(--space-3)}
+.q-pick .btn{align-self:flex-start}

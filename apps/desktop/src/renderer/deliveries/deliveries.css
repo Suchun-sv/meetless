@@ -1,0 +1,14 @@
+/* U3 deliveries (task 10): rounds timeline, frozen accounts, feedback. Ported from needs2/v2.css
+   "Pages" (.dl*, .plain, .note, .fb), with the v4 values. Tokens only. Lists use spacing, no
+   markers. The round card itself has no custom class for its status beyond the dashed "planned"
+   border below; its testid carries `data-status` for anything else a test needs. */
+.dl{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-5);display:flex;flex-direction:column;gap:var(--space-3);background:var(--color-bg)}
+.dl[data-status="current"]{border-color:var(--color-border-strong)}
+.dl-planned{border-style:dashed;border-color:var(--color-border-strong)}
+.dl-h{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
+.dl-b{display:flex;flex-direction:column;gap:var(--space-4)}
+.dl-b h3{margin-bottom:var(--space-1)}
+.dl-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:var(--space-6)}
+.plain{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--space-1)}
+.note{font-size:var(--text-sm);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);background:var(--color-surface);color:var(--color-text-secondary)}
+.fb{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);border-radius:var(--radius-md);background:var(--color-surface);margin-bottom:var(--space-2);font-size:var(--text-sm)}

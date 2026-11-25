@@ -1,0 +1,44 @@
+/* U1 composer and the project agent thread. Ported from needs2/v2.css "Composer" and
+   needs3/v3.css "Composer with project agent", with the v4 values. Tokens only.
+   Violet here only on the base .chip.hot (agent suggestion chips) and the agent thread title
+   (.thread-h strong, via base .tone-ai where used). */
+.composer-wrap{position:sticky;bottom:0;padding:var(--space-3) var(--space-6) var(--space-4);background:var(--color-bg);display:flex;flex-direction:column;align-items:center;z-index:5}
+.composer-wrap.inline{position:static;background:none;padding:var(--space-1) 0 var(--space-2)}
+.composer{width:100%;max-width:var(--layout-content);display:flex;align-items:flex-end;gap:var(--space-2);background:var(--color-bg);border:var(--border-strong);border-radius:var(--radius-xl);padding:var(--space-2) var(--space-2) var(--space-2) var(--space-3);box-shadow:var(--shadow-md);transition:border-color var(--duration-fast) var(--ease-standard)}
+.composer:focus-within{border-color:var(--color-text-tertiary)}
+.composer textarea{flex:1;border:0;outline:none;resize:none;font:inherit;font-size:var(--text-md);line-height:var(--leading-normal);padding:var(--space-1);max-height:200px;background:transparent;color:var(--color-text)}
+.composer textarea::placeholder{color:var(--color-text-tertiary)}
+.composer.priv{background:var(--color-sidebar);border-style:dashed;border-color:var(--color-border-strong)}
+.cm-file{display:none}
+.cm-plus{width:32px;height:32px;border-radius:var(--radius-md);border:var(--border);background:var(--color-bg);font-size:var(--text-lg);line-height:1;cursor:pointer;color:var(--color-text-secondary);flex:none}
+.cm-plus:hover{background:var(--color-hover)}
+.cm-send{width:32px;height:32px;border-radius:var(--radius-md);border:0;background:var(--color-border-strong);color:var(--color-text-inverse);font-size:var(--text-md);font-weight:var(--weight-semibold);cursor:default;flex:none}
+.cm-send.on{background:var(--color-text);cursor:pointer}
+.cm-hint{font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:var(--space-2)}
+.seg.pv{align-self:center;flex:none}
+
+/* Suggestion chips above the composer: base .chip / .chip.hot (hot ones come from the project
+   agent's rules); this file only lays the row out. */
+.chips{display:flex;flex-wrap:wrap;gap:var(--space-2);justify-content:center;max-width:var(--layout-content);width:100%;margin-bottom:var(--space-2)}
+
+/* Agent thread */
+.thread{width:100%;max-width:var(--layout-content);background:var(--color-bg);border:var(--border);border-radius:var(--radius-xl);box-shadow:var(--shadow-md);margin-bottom:var(--space-2);display:flex;flex-direction:column;max-height:46vh}
+.thread-h{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3) var(--space-1) var(--space-4);font-size:var(--text-sm)}
+.thread-h strong{color:var(--color-ai);font-weight:var(--weight-semibold)}
+.thread-b{overflow:auto;padding:var(--space-1) var(--space-4) var(--space-4);display:flex;flex-direction:column;gap:var(--space-3)}
+.thread-msg{display:flex;flex-direction:column;gap:var(--space-2)}
+.msg-u{align-self:flex-end;max-width:80%;background:var(--color-surface);border-radius:var(--radius-lg);padding:var(--space-2) var(--space-3);font-size:var(--text-base);line-height:var(--leading-normal);white-space:pre-wrap}
+.msg-a{display:flex;flex-direction:column;gap:var(--space-2);font-size:var(--text-base);line-height:var(--leading-normal)}
+
+/* Reply body: one group per cited need (retrieval), rows share the thread's flex-column gap */
+.rp-group{display:flex;flex-direction:column;gap:var(--space-1)}
+/* A material citation row (contract §12.21): the chip, then its cited text. The chip is base .chip
+   (neutral, no .hot violet); this file only stacks the row and keeps it from stretching full width. */
+.rp-mat{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-1)}
+
+/* Motion */
+.cm-plus,.cm-send{transition:background-color var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard),transform var(--duration-fast) var(--ease-standard)}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference){
+  .cm-send.on:hover{transform:translateY(-1px)}
+  .cm-plus:active,.cm-send.on:active{transform:translateY(1px) scale(.985);transition-duration:calc(var(--duration-fast) * .75)}
+}
