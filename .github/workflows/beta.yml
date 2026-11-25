@@ -1,5 +1,5 @@
 # The beta channel: every push to main builds Meetless's app code alone (dist/: main, preload,
-# renderer; no Electron, no installers) into the rolling "beta" prerelease as hot-<commit>.zip and a
+# renderer; no Electron, no installers) into the rolling "hot" prerelease (the first tag, "beta", was frozen by an immutable release) as hot-<commit>.zip and a
 # signed hot.json. Installed builds pick it up as a hot update (apps/desktop/src/main/hot-update.ts).
 name: Beta
 
@@ -44,18 +44,18 @@ jobs:
         env:
           HOT_SIGNING_KEY: ${{ secrets.HOT_SIGNING_KEY }}
         run: node scripts/hot-pack.mjs release/hot
-      - name: Publish to the beta prerelease
+      - name: Publish to the hot prerelease
         working-directory: apps/desktop/release/hot
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release view beta >/dev/null 2>&1 || gh release create beta --prerelease --latest=false --target "$GITHUB_SHA" \
+          gh release view hot >/dev/null 2>&1 || gh release create hot --prerelease --latest=false --target "$GITHUB_SHA" \
             --title "Meetless beta (hot updates)" \
             --notes "Hot updates for installed builds: every push to main replaces hot.json here. Installers are in the other releases."
           # The archive first, then the manifest that points at it.
-          gh release upload beta hot-*.zip --clobber
-          gh release upload beta hot.json --clobber
+          gh release upload hot hot-*.zip --clobber
+          gh release upload hot hot.json --clobber
           # Keep the five newest archives (a client may still hold an older manifest for a while).
-          gh release view beta --json assets -q '.assets[] | select(.name | startswith("hot-")) | "\(.createdAt) \(.name)"' \
-            | sort -r | tail -n +6 | cut -d' ' -f2 | while read -r old; do gh release delete-asset beta "$old" -y; done
+          gh release view hot --json assets -q '.assets[] | select(.name | startswith("hot-")) | "\(.createdAt) \(.name)"' \
+            | sort -r | tail -n +6 | cut -d' ' -f2 | while read -r old; do gh release delete-asset hot "$old" -y; done

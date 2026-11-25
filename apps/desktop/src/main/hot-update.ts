@@ -9,7 +9,7 @@ import * as pick from '../boot/pick.cjs';
 
 /**
  * Hot updates from the beta channel, the way Gleeok's work. Every push to main builds the app code
- * alone (dist/: main, preload, renderer; no Electron) into the rolling `beta` prerelease as
+ * alone (dist/: main, preload, renderer; no Electron) into the rolling `hot` prerelease as
  * hot-<commit>.zip and hot.json (.github/workflows/beta.yml, scripts/hot-pack.mjs). A copy is
  * unpacked into <userData>/hot/<commit>/ only after all of this holds:
  * - hot.json's manifest is signed by the Ed25519 key below;
@@ -26,7 +26,8 @@ export const HOT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAjn21SSA2UJ+U2qa0qysSc8Uu6B7hnYWu3wX51VUYSYQ=
 -----END PUBLIC KEY-----
 `;
-export const BETA_URL = 'https://github.com/Suchun-sv/meetless/releases/download/beta';
+/** The hot channel's release, then the first one (`beta`, frozen by an immutable release) as a fallback. */
+export const HOT_URLS = ['https://github.com/Suchun-sv/meetless/releases/download/hot', 'https://github.com/Suchun-sv/meetless/releases/download/beta'];
 export const HOT_CHECK_MS = 15 * 60_000;
 const MANIFEST_MAX_BYTES = 64 * 1024;
 export const HOT_MAX_BYTES = 64 * 1024 * 1024;
@@ -143,10 +144,10 @@ export interface HotUpdaterOptions {
 export class HotUpdater {
   private st: HotState;
   private inFlight: Promise<void> | null = null;
-  private readonly base: string;
+  private readonly bases: string[];
 
   constructor(private readonly o: HotUpdaterOptions) {
-    this.base = (o.baseUrl ?? BETA_URL).replace(/\/$/, '');
+    this.bases = (o.baseUrl ? [o.baseUrl] : HOT_URLS).map((b) => b.replace(/\/$/, ''));
     this.st = { running: o.runningHot, pending: null };
   }
 
@@ -178,13 +179,13 @@ export class HotUpdater {
     return this.inFlight;
   }
 
-  private async get(name: string, max: number, timeoutMs: number): Promise<Buffer | null> {
-    const res = await this.o.fetch(`${this.base}/${name}`, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+  private async get(base: string, name: string, max: number, timeoutMs: number): Promise<Buffer | null> {
+    const res = await this.o.fetch(`${base}/${name}`, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
     if (res.status === 404) return null;
     if (!res.ok) throw new HotError(`${name}: HTTP ${res.status}`);
     // The redirect target must be GitHub's (or the configured base's own origin in a dev run).
     const at = res.url ? new URL(res.url) : null;
-    const home = new URL(this.base).origin;
+    const home = new URL(base).origin;
     if (at && at.origin !== home && !(at.protocol === 'https:' && /(^|\.)(github\.com|githubusercontent\.com)$/.test(at.hostname))) throw new HotError(`redirect to ${at.host} refused`);
     if (Number(res.headers.get('content-length') ?? 0) > max) throw new HotError(`${name} too large`);
     const buf = Buffer.from(await res.arrayBuffer());
@@ -193,8 +194,26 @@ export class HotUpdater {
   }
 
   private async run(): Promise<void> {
-    const raw = await this.get('hot.json', MANIFEST_MAX_BYTES, 15_000);
-    if (!raw) return;
+    // The first channel that has a hot.json; the zip comes from the same one.
+    let base = '';
+    let raw: Buffer | null = null;
+    let lastError: unknown = null;
+    for (const b of this.bases) {
+      try {
+        raw = await this.get(b, 'hot.json', MANIFEST_MAX_BYTES, 15_000);
+      } catch (e) {
+        lastError = e;
+        raw = null;
+      }
+      if (raw) {
+        base = b;
+        break;
+      }
+    }
+    if (!raw) {
+      if (lastError) throw lastError;
+      return;
+    }
     const m = verifyManifest(raw.toString('utf8'), this.o.publicKey);
     if (!pick.sameShell(m.shell, this.o.shell)) return this.o.log?.(`hot update ${m.commit.slice(0, 7)} needs another shell (${m.shell.electron}); a full release brings it`);
     const running = this.o.running;
@@ -203,7 +222,7 @@ export class HotUpdater {
     const state = pick.readState(this.o.hotDir);
     if (state.bad.includes(m.commit)) return;
 
-    const zip = await this.get(m.file, m.size, 10 * 60_000);
+    const zip = await this.get(base, m.file, m.size, 10 * 60_000);
     if (!zip) return;
     if (zip.length !== m.size) throw new HotError(`size ${zip.length} is not the manifest's ${m.size}`);
     if (createHash('sha512').update(zip).digest('base64') !== m.sha512) throw new HotError('sha512 mismatch');
