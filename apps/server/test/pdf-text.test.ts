@@ -6,11 +6,13 @@
  * service is involved — unpdf runs in-process — so these run against real Postgres
  * only (`withServer`), no `infra/dev/deps.sh` dependency.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DerivedPreview } from '@meetless/core';
 import { configFromEnv, sha256, startServer, type SyncService } from '../src/index';
-import { capTexts, MAX_PDF_TEXT_CHARS } from '../src/office/pdf-text';
+import { capTexts, MAX_PDF_TEXT_CHARS, PdfTextWorker } from '../src/office/pdf-text';
 import { cmd, http, IDS, make, requirePostgres, serverConfig, tempDir, TEST_DATABASE_URL, testSchema, TOKENS, until, withServer } from './helpers';
 import { MAX_IMPORT_BYTES } from '../src/imports/extract';
 import { minimalPdf } from './support/pdf';
@@ -449,5 +451,54 @@ describe('capTexts (pure cap arithmetic)', () => {
     expect(MAX_PDF_TEXT_CHARS).toBe(500_000);
     const capped = capTexts(['x'.repeat(500_001)]);
     expect(capped[0]).toHaveLength(500_000);
+  });
+});
+
+describe('PdfTextWorker attempt markers (H4: no crash loop across restarts)', () => {
+  it('a version whose attempt marker survived a restart is recorded as failed (crashed) and never parsed again; others parse and leave no marker', async () => {
+    const server = await withServer({ workers: { pdfText: false } });
+    const dir = tempDir('pdf-attempts');
+    try {
+      const { svc } = server;
+      await ok(svc, IDS.lin, make.project('P-pdf-mark'));
+      for (const a of ['art-crash', 'art-fine']) await ok(svc, IDS.lin, cmd('artifact.created', { artifactId: a, projectId: 'P-pdf-mark', kind: 'pdf', title: a, where: 'local', needIds: [] }));
+      await publishPdf(svc, IDS.lin, 'art-crash', 'v-crash', minimalPdf(['boom']));
+      await publishPdf(svc, IDS.lin, 'art-fine', 'v-fine', minimalPdf(['fine']));
+      // What a crash mid-parse leaves behind.
+      writeFileSync(join(dir.path, createHash('sha256').update('v-crash').digest('hex')), 'v-crash');
+
+      const parsed: string[] = [];
+      const worker = new PdfTextWorker(svc, { attemptsDir: dir.path, parse: async (b) => (parsed.push(new TextDecoder().decode(b).includes('boom') ? 'crash' : 'fine'), ['page']) });
+      worker.start();
+      expect(await waitDerived(svc, 'art-crash', 'v-crash')).toMatchObject({ status: 'failed', error: 'crashed' });
+      expect(await waitDerived(svc, 'art-fine', 'v-fine')).toMatchObject({ status: 'ready' });
+      await worker.stop();
+      expect(parsed).toEqual(['fine']);
+      expect(readdirSync(dir.path)).toEqual([]);
+    } finally {
+      dir.rm();
+      await server.stop();
+    }
+  });
+
+  it('the default parse runs in the sandbox: a real PDF still gets its text', async () => {
+    const server = await withServer({ workers: { pdfText: false } });
+    const dir = tempDir('pdf-attempts');
+    try {
+      const { svc } = server;
+      await ok(svc, IDS.lin, make.project('P-pdf-sb'));
+      await ok(svc, IDS.lin, cmd('artifact.created', { artifactId: 'art-sb', projectId: 'P-pdf-sb', kind: 'pdf', title: 'sb', where: 'local', needIds: [] }));
+      await publishPdf(svc, IDS.lin, 'art-sb', 'v-sb', minimalPdf([['one'], ['two']]));
+      const worker = new PdfTextWorker(svc, { attemptsDir: dir.path });
+      worker.start();
+      const d = await waitDerived(svc, 'art-sb', 'v-sb', 20_000);
+      await worker.stop();
+      expect(d.status).toBe('ready');
+      expect(d.texts).toHaveLength(2);
+      expect(readdirSync(dir.path)).toEqual([]);
+    } finally {
+      dir.rm();
+      await server.stop();
+    }
   });
 });

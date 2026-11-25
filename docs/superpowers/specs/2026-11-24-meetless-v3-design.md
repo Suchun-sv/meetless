@@ -29,9 +29,8 @@ Windows / Linux 安装包；密码、邮箱或学校单点登录；
 
 ## 3. 约束
 
-- 开发、测试、截图全部在 the dev server（`ssh <user>@<dev-server>`，fish shell，用 `bash -lc`；
-  `PATH=$HOME/.local/bin:$HOME/bin:$PATH DOCKER_HOST=unix:///run/user/1000/docker.sock`）。不在别的机器上跑构建。
-- 不碰试用服务器：worktree `~/work/meetless-mac-pkg`、端口 4875、schema `meetless_trial`、`~/work/meetless-trial`。
+- 开发、测试、截图全部在共用开发机上跑（连接方式和环境变量见仓库外的开发规则）。不在别的机器上跑构建。
+- 不碰试用服务器（端口、schema 和目录见仓库外的开发规则）。
   不停、不重置 `meetless-pg` 及其卷。
 - Docker：只用 `meetless-*` 命名的资源，只绑 127.0.0.1，先查名字和端口冲突，不 prune，不 sudo，不装系统包。
 - Electron 不在用户桌面上开窗，只走 Xvfb 容器（`infra/dev/electron-e2e.sh`）。
@@ -183,8 +182,8 @@ dashboard / agent / context，旧的 PR 式模型已删除（历史在 git 里�
     没授权时界面提示去授权，不报假内容。
   - 已上传的文档版本（DOCX / PPTX / PDF）。
   - 测试用本地 bare git 仓库代替 Overleaf、用假的 MCP 服务代替 Notion；真实 Overleaf / Notion 账号的验证留给用户试用时做。
-- **试用数据**：旧试用服务器里是旧模型的数据，不迁移。v3 试用另起一个实例（端口 4876、schema `meetless_trial_v3`），
-  旧的 4875 照常开着，等用户说再关。
+- **试用数据**：旧试用服务器里是旧模型的数据，不迁移。v3 试用另起一个实例（独立端口和 schema），
+  旧试用照常开着，等用户说再关。
 
 ## 9. 并行分工
 

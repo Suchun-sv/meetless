@@ -11,6 +11,8 @@ export interface CallApiOptions {
   fetchImpl?: typeof fetch;
   /** E.g. `AbortSignal.timeout(ms)`; an abort or a timeout is reported as `TIMEOUT`. */
   signal?: AbortSignal;
+  /** Extra request headers (the web bridge's `x-meetless-csrf`). */
+  headers?: Record<string, string>;
 }
 
 export async function callApi(base: string, token: string | null, name: ApiName, input: unknown, opts: CallApiOptions = {}): Promise<Result<{ data: unknown }>> {
@@ -23,6 +25,7 @@ export async function callApi(base: string, token: string | null, name: ApiName,
       headers: {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(body !== null ? { 'content-type': 'application/json' } : {}),
+        ...(opts.headers ?? {}),
       },
       ...(body !== null ? { body } : {}),
       ...(opts.signal ? { signal: opts.signal } : {}),

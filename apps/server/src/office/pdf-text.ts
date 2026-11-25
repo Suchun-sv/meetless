@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { Id } from '@meetless/core';
@@ -94,8 +94,18 @@ function delay(ms: number): Promise<void> {
 
 export interface PdfTextWorkerOptions {
   log?: (msg: string) => void;
-  /** Defaults to `pdfPages` (unpdf). Injectable so tests exercise the grace/timeout paths without a real hung parse. */
+  /**
+   * Defaults to `pdfPages` (unpdf in the extraction sandbox, killed at `parseTimeoutMs`).
+   * Injectable so tests exercise the grace/timeout paths without a real hung parse.
+   */
   parse?: (bytes: Uint8Array) => Promise<string[]>;
+  /**
+   * Where a parse leaves its attempt marker (`startServer` gives `<dataDir>/pdf-text-attempts`).
+   * A marker still there when the version comes up again means that parse took the process down:
+   * the version is recorded as `failed` (`crashed`) instead of being parsed again, so one hostile
+   * PDF cannot crash the server on every restart. Unset: no markers.
+   */
+  attemptsDir?: string;
   /** Default `PARSE_TIMEOUT_MS`. */
   parseTimeoutMs?: number;
   /** Default `STOP_GRACE_MS`. */
@@ -110,8 +120,11 @@ interface FoundVersion {
 /**
  * Server-side PDF text extraction (contract §12.21). For every `pdf` artifact version
  * with a `blobHash` and no `derived` yet, it reads the blob bytes and extracts per-page
- * text in-process with unpdf (the same `pdfPages` helper `extractText('pdf', …)` uses,
- * Task 5), then records `artifactVersion.derived` as the system actor `system:pdf-text`.
+ * text with unpdf in the extraction sandbox (the same `pdfPages` helper `extractText('pdf', …)`
+ * uses: a worker thread with a heap limit, killed at `parseTimeoutMs`), then records
+ * `artifactVersion.derived` as the system actor `system:pdf-text`. Before each parse it writes
+ * an attempt marker (`attemptsDir`); a version whose marker survived a restart is recorded as
+ * `failed` (`crashed`) rather than parsed again.
  * Unlike the office worker there is no external converter service, no page images, and
  * no content-hash cache: parsing a PDF is local, synchronous CPU work.
  *
@@ -128,7 +141,7 @@ interface FoundVersion {
  * parse that only settles after `stop()` has returned — `record()` checks a `stopped`
  * flag first — so that version's `derived` stays `null` and a later `start()` retries it.
  *
- * A parse that timed out is still running in-process, so the queue waits for it to settle
+ * An injected `parse` that timed out may still be running, so the queue waits for it to settle
  * before starting the next one (at most one parse is ever running; `stop()`'s grace still
  * bounds shutdown). A blob bigger than `MAX_IMPORT_BYTES` is never read or parsed: it is
  * recorded as `status: 'failed', error: 'too_large'` from its meta size alone.
@@ -144,13 +157,26 @@ export class PdfTextWorker {
    * not start the next parse until it settles, so a run of slow PDFs never piles up parses.
    */
   private lingering: Promise<void> | null = null;
+  /** The version whose parse is running (its attempt marker is on disk). */
+  private parsing: Id | null = null;
   private readonly parse: (bytes: Uint8Array) => Promise<string[]>;
 
   constructor(
     private readonly svc: SyncService,
     private readonly opts: PdfTextWorkerOptions = {},
   ) {
-    this.parse = opts.parse ?? pdfPages;
+    this.parse = opts.parse ?? ((bytes) => pdfPages(bytes, { timeoutMs: opts.parseTimeoutMs ?? PARSE_TIMEOUT_MS }));
+    if (opts.attemptsDir) mkdirSync(opts.attemptsDir, { recursive: true, mode: 0o700 });
+  }
+
+  /** The marker file for a version (its id hashed, so any id is a safe file name). */
+  private marker(versionId: Id): string | null {
+    return this.opts.attemptsDir ? join(this.opts.attemptsDir, createHash('sha256').update(versionId).digest('hex')) : null;
+  }
+
+  private clearMarker(versionId: Id): void {
+    const m = this.marker(versionId);
+    if (m) rmSync(m, { force: true });
   }
 
   start(): void {
@@ -180,6 +206,8 @@ export class PdfTextWorker {
     this.queue = [];
     this.queued.clear();
     if (this.running) await Promise.race([this.running, delay(this.opts.stopGraceMs ?? STOP_GRACE_MS)]);
+    // A clean stop is not a crash: the parse it cut short is tried again after the next start.
+    if (this.parsing) this.clearMarker(this.parsing);
   }
 
   /** Looks up a pdf version by id; `null` if it is not a pdf, has no blob yet, or already has `derived`. */
@@ -280,15 +308,29 @@ export class PdfTextWorker {
       return;
     }
 
+    // A marker left by an earlier attempt: that parse never finished because the process died.
+    const marker = this.marker(versionId);
+    if (marker && existsSync(marker)) {
+      this.opts.log?.(`[pdf-text] ${versionId}: an earlier parse did not finish; not parsing it again`);
+      await this.record(artifactId, versionId, { status: 'failed', texts: [], error: 'crashed', converter: UNPDF_CONVERTER });
+      if (!this.stopped) rmSync(marker, { force: true });
+      return;
+    }
+
     let pages: string[];
+    if (marker) writeFileSync(marker, versionId, { mode: 0o600 });
+    this.parsing = versionId;
     try {
       pages = await this.parseWithTimeout(bytes);
     } catch (e) {
-      const timedOut = e instanceof ParseTimeoutError;
+      const timedOut = e instanceof ParseTimeoutError || (e as { reason?: string }).reason === 'timeout';
+      const tooLarge = (e as { reason?: string }).reason === 'too_large';
       this.opts.log?.(`[pdf-text] ${versionId}: ${(e as Error).message}`);
-      await this.record(artifactId, versionId, { status: 'failed', texts: [], error: timedOut ? 'timeout' : 'corrupt', converter: UNPDF_CONVERTER });
+      await this.record(artifactId, versionId, { status: 'failed', texts: [], error: timedOut ? 'timeout' : tooLarge ? 'too_large' : 'corrupt', converter: UNPDF_CONVERTER });
+      this.settled(versionId);
       return;
     }
+    this.settled(versionId);
 
     const cleaned = capTexts(pages.map(cleanPage));
     if (!cleaned.some((t) => t.length > 0)) {
@@ -296,6 +338,12 @@ export class PdfTextWorker {
       return;
     }
     await this.record(artifactId, versionId, { status: 'ready', texts: cleaned, error: null, converter: UNPDF_CONVERTER });
+  }
+
+  /** The parse of `versionId` is over and the process survived it: its marker goes. */
+  private settled(versionId: Id): void {
+    if (this.parsing === versionId) this.parsing = null;
+    this.clearMarker(versionId);
   }
 
   private async record(

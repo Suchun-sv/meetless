@@ -11,6 +11,23 @@ const { join } = require('node:path');
 const pkg = require('./package.json');
 const signMac = require('./scripts/sign-mac.cjs');
 
+/**
+ * Electron fuses, flipped in afterPack so the macOS signature that follows covers them
+ * (electron-builder's own `electronFuses` would flip them after afterPack and break it).
+ * - No ELECTRON_RUN_AS_NODE, NODE_OPTIONS or --inspect: the signed binary cannot be used as a
+ *   plain Node runtime or be attached to.
+ * - The app loads only from app.asar.
+ * Left at Electron's defaults: grantFileProtocolExtraPrivileges (the renderer is a Vite module
+ * bundle loaded from file://, which needs it) and embedded asar integrity validation (not yet
+ * tried on a real Mac or Windows build).
+ */
+const FUSES = {
+  runAsNode: false,
+  enableNodeOptionsEnvironmentVariable: false,
+  enableNodeCliInspectArguments: false,
+  onlyLoadAppFromAsar: true,
+};
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: 'app.meetless.desktop',
@@ -19,6 +36,8 @@ module.exports = {
   electronVersion: pkg.devDependencies.electron,
   directories: { app: 'release/app', output: 'release/dist', buildResources: 'build' },
   files: ['package.json', 'dist/**/*', '!**/*.map'],
+  // LICENSE, THIRD_PARTY_NOTICES.txt and the font OFL texts (scripts/licenses.mjs), in <resources>/licenses.
+  extraResources: [{ from: 'release/licenses', to: 'licenses' }],
   asar: true,
   // Returning false tells electron-builder that node_modules are handled outside it. Without this
   // it falls back to apps/desktop and copies its dependencies (react, ws, workspace sources) into
@@ -27,6 +46,7 @@ module.exports = {
   // Electron's default_app.asar (the "drop an app here" shell) is never used once app.asar exists.
   // afterPack runs before the zip / dmg are made, so the signature covers the final bundle.
   afterPack: async (ctx) => {
+    await ctx.packager.addElectronFuses(ctx, await ctx.packager.generateFuseConfig(FUSES));
     if (ctx.electronPlatformName !== 'darwin') return;
     const app = join(ctx.appOutDir, `${ctx.packager.appInfo.productFilename}.app`);
     await rm(join(app, 'Contents/Resources/default_app.asar'), { force: true });

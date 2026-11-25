@@ -27,6 +27,7 @@ export default defineConfig({
   // Fonts always ship as files, never inlined. Vite inlines assets under 4 KB as data: URLs, and a few
   // Noto Sans SC slices are that small. The packaged CSP above has no font-src, so fonts fall back to
   // default-src 'self', which blocks data: URLs: an inlined slice would silently not load in Electron.
-  build: { outDir: '../../dist/renderer', emptyOutDir: true, assetsInlineLimit: (file: string) => (file.endsWith('.woff2') ? false : undefined) },
+  // es2020 + safari15: the web build runs on older iPhones and Macs too; no newer syntax ships.
+  build: { target: ['es2020', 'safari15'], outDir: '../../dist/renderer', emptyOutDir: true, assetsInlineLimit: (file: string) => (file.endsWith('.woff2') ? false : undefined) },
   server: { host: '127.0.0.1' },
 });

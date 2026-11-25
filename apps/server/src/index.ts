@@ -1,6 +1,6 @@
 export { buildApp, type ClientMessage, type ServerMessage } from './http';
 export { SyncService, TEAM_STREAM, BlobHashError, unknownEventTypeError, scopeMismatchError, type Command, type CommandResult, type EventPage } from './service';
-export { Authenticator, DevAuth, DEFAULT_DEV_USERS, parseDevUsers, type AuthFailure, type DevUser, type Principal } from './auth';
+export { Authenticator, DevAuth, DEFAULT_DEV_USERS, parseDevUsers, type AuthFailure, type DevUser, type Principal, type TokenPrincipal } from './auth';
 export { BlobFiles, sha256, BLOB_HASH } from './blobs';
 export { MemoryEventStore, MemoryBlobMetaStore, MemoryDerivationStore } from './store/memory';
 export { openPostgres, migrate, firstUnknownEvent, PgEventStore, PgBlobMetaStore, PgDerivationStore } from './store/postgres';

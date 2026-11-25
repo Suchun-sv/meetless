@@ -2,7 +2,7 @@
 
 ## Origin
 
-- Source: Claude Design project `52541e51-171d-433e-9140-207f9ff2033f` ("Meetless Prototype").
+- Source: a Claude Design project ("Meetless Prototype").
 - Copied on 2026-11-24 with the claude-design MCP `read_file` tool.
 - Copied verbatim. The only processing was decoding the tool's HTML-entity escaping (`&lt;`, `&gt;`, `&amp;`). Every file's byte size matches the size in the project listing.
 - Why it is here: the Claude Design service shuts down by 2026-12-14, so this repo has to hold the design.

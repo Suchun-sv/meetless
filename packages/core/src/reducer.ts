@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 import type { AgentReply } from './agent';
 import { DomainError } from './errors';
-import { noDots } from './text';
+import { isWebUrl, noDots } from './text';
 import { isSystemActor, type DomainEvent, type EventEnvelope, type EventType, type ExtractInput } from './events';
 import {
   ARTIFACT_KINDS,
@@ -13,6 +13,7 @@ import {
   SOURCE_KINDS,
   WORK_EFFECTS,
   dashboardKey,
+  type ArtifactKind,
   type ChatMessage,
   type ChatThread,
   type Conflict,
@@ -65,6 +66,18 @@ function optText(v: unknown, field: string): string | null {
   if (v === undefined || v === null) return null;
   if (typeof v !== 'string') throw new DomainError('INVALID_EVENT', `${field} must be a string`, { field });
   return v;
+}
+
+/**
+ * An artifact or version URL: empty, or an http(s) URL. An Overleaf artifact may instead name a
+ * local clone (an absolute path or `file://`), which only the dev-bridge host ever clones; the
+ * desktop never opens one. Every client gets the same rule because the server applies it.
+ */
+function linkUrl(v: unknown, field: string, kind: ArtifactKind): string | null {
+  const u = optText(v, field);
+  if (u === null || u.trim() === '' || isWebUrl(u)) return u;
+  if (kind === 'overleaf' && (u.startsWith('/') || u.startsWith('file:///'))) return u;
+  throw new DomainError('INVALID_EVENT', `${field} must be an http(s) URL`, { field });
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -983,7 +996,7 @@ const handlers: Handlers = {
       kind: p.kind,
       title: text(p.title, 'title'),
       where: text(p.where, 'where'),
-      url: optText(p.url, 'url'),
+      url: linkUrl(p.url, 'url', p.kind),
       needIds: linkNeeds(s, p.projectId, p.needIds, e.actorId, privateTo),
       versions: [],
       privateTo,
@@ -1005,7 +1018,7 @@ const handlers: Handlers = {
       note: typeof p.note === 'string' ? p.note : '',
       blobHash: p.blobHash ?? null,
       mediaType: optText(p.mediaType, 'mediaType'),
-      url: optText(p.url, 'url'),
+      url: linkUrl(p.url, 'url', a.kind),
       by: e.actorId,
       seq: e.seq,
       derived: null,

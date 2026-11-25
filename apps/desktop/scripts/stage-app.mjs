@@ -4,9 +4,11 @@
 // nothing from node_modules is needed at runtime. This script fails if the
 // main or preload bundle still imports a package that would not exist in the app
 // (esbuild's metafile from build-main.mjs, so require strings in bundled code do not count).
+// It also stages release/licenses (scripts/licenses.mjs), which electron-builder ships beside the asar.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { unbundled } from './bundle-check.mjs';
+import { stageLicenses } from './licenses.mjs';
 
 const desktop = resolve(import.meta.dirname, '..');
 const pkg = JSON.parse(readFileSync(resolve(desktop, 'package.json'), 'utf8'));
@@ -33,9 +35,9 @@ writeFileSync(
       name: 'meetless',
       productName: 'Meetless',
       version: pkg.version,
-      description: 'Meetless desktop client (unsigned dev build)',
+      description: 'Meetless desktop client',
       author: { name: 'Meetless' },
-      license: 'UNLICENSED',
+      license: pkg.license,
       private: true,
       main: pkg.main,
     },
@@ -43,4 +45,6 @@ writeFileSync(
     2,
   )}\n`,
 );
-console.log(`staged ${out} (version ${pkg.version}, main ${pkg.main})`);
+// LICENSE, third-party and font notices: shipped beside the asar (electron-builder extraResources).
+stageLicenses(desktop, resolve(desktop, 'release/licenses'));
+console.log(`staged ${out} (version ${pkg.version}, main ${pkg.main}) and release/licenses`);

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import type { DomainEvent, Id, Seq } from '@meetless/core';
@@ -22,17 +22,10 @@ import type {
 import { callApi } from './api-call';
 import { CaptureService } from './capture';
 import { LocalCache } from './cache';
+import { fetchAllEvents, subscribeMessage, type ServerMessage } from './sync-protocol';
 // --- U3 capture
 import { applyEvent, emptyState, isDomainError, orderBySeq, type IsoTime } from '@meetless/core';
 import { CaptureError } from './capture';
-
-/** Server -> client WebSocket messages (mirror of apps/server/src/http.ts). */
-type ServerMessage =
-  | { type: 'hello'; head: Seq; epoch: Id | null; userId: Id }
-  | { type: 'events'; events: DomainEvent[]; cursor: Seq; head: Seq; epoch: Id | null }
-  | { type: 'synced'; cursor: Seq; head: Seq; epoch: Id | null }
-  | { type: 'reset'; reason: string }
-  | { type: 'error'; code: string };
 
 /**
  * DEV-ONLY session record. The dev bearer token is stored in plain JSON in the
@@ -46,7 +39,8 @@ interface StoredSession extends Session {
 export interface ClientNodeOptions {
   dataDir: string;
   systemLocales?: string[];
-  host?: ClientSnapshot['host'];
+  /** Never `web`: the web host is the web bridge, not a ClientNode. */
+  host?: Exclude<ClientSnapshot['host'], 'web'>;
   minBackoffMs?: number;
   maxBackoffMs?: number;
   /** Asks the user for a repository folder (Electron dialog). `hint` is only honoured by dev hosts. */
@@ -67,9 +61,10 @@ const BLOB = /^sha256:[0-9a-f]{64}$/;
 /** Routes reachable from the app with authentication (contract §3); everything else is `NOT_AVAILABLE` to the client. */
 const APP_ROUTE_SET: ReadonlySet<string> = new Set(APP_ROUTE_NAMES);
 
+/** Written 0600: the session file holds the bearer token. */
 function writeJsonAtomic(file: string, value: unknown): void {
   const tmp = `${file}.${randomUUID()}.tmp`;
-  writeFileSync(tmp, JSON.stringify(value, null, 2));
+  writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
   renameSync(tmp, file);
 }
 
@@ -105,8 +100,11 @@ export class ClientNode implements MeetlessBridge {
   private readonly capture: CaptureService;
 
   private constructor(private readonly opts: ClientNodeOptions) {
-    mkdirSync(opts.dataDir, { recursive: true });
+    // 0700: the folder holds the session token, the local cache and downloaded files.
+    mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
     this.sessionFile = join(opts.dataDir, 'session.json');
+    // A session.json written by 0.1.0 or earlier may be 0644.
+    if (existsSync(this.sessionFile)) chmodSync(this.sessionFile, 0o600);
     this.prefsFile = join(opts.dataDir, 'prefs.json');
     this.repos = new GitRepos(opts.dataDir);
     this.backoff = opts.minBackoffMs ?? 250;
@@ -342,7 +340,7 @@ export class ClientNode implements MeetlessBridge {
 
   private sendSubscribe(ws: WebSocket): void {
     if (!this.cache || ws.readyState !== ws.OPEN) return;
-    ws.send(JSON.stringify({ type: 'subscribe', after: this.cache.cursor, epoch: this.cache.epoch }));
+    ws.send(subscribeMessage(this.cache));
   }
 
   private async onMessage(ws: WebSocket, m: ServerMessage): Promise<void> {
@@ -383,21 +381,14 @@ export class ClientNode implements MeetlessBridge {
     if (this.resyncing || !this.session || !this.cache) return;
     this.resyncing = true;
     try {
-      let after = 0;
-      let epoch: Id | null = null;
-      const events: DomainEvent[] = [];
-      for (;;) {
-        const res = await fetch(`${this.session.serverUrl}/v1/events?after=${after}&limit=5000`, {
-          headers: { authorization: `Bearer ${this.session.token}` },
+      const session = this.session;
+      const { events, cursor: after, epoch } = await fetchAllEvents(async (after) => {
+        const res = await fetch(`${session.serverUrl}/v1/events?after=${after}&limit=5000`, {
+          headers: { authorization: `Bearer ${session.token}` },
         });
         if (!res.ok) throw new Error(`HTTP_${res.status}`);
-        const page = (await res.json()) as { events: DomainEvent[]; cursor: Seq; head: Seq; epoch: Id | null };
-        events.push(...page.events);
-        epoch = page.epoch;
-        const done = page.cursor >= page.head || page.cursor === after;
-        after = page.cursor;
-        if (done) break;
-      }
+        return (await res.json()) as { events: DomainEvent[]; cursor: Seq; head: Seq; epoch: Id | null };
+      });
       if (ws !== this.ws || !this.cache) return;
       this.cache.replace(events, after, epoch);
       this.purgeBlobs();
@@ -531,7 +522,7 @@ export class ClientNode implements MeetlessBridge {
   private storeBlob(hash: string, bytes: Uint8Array): void {
     const file = this.blobPath(hash);
     if (existsSync(file)) return;
-    mkdirSync(join(file, '..'), { recursive: true });
+    mkdirSync(join(file, '..'), { recursive: true, mode: 0o700 });
     const tmp = `${file}.${randomUUID()}.tmp`;
     writeFileSync(tmp, bytes);
     renameSync(tmp, file);

@@ -12,8 +12,11 @@ import {
   type ApiResponse,
   type McpToolName,
   type RouteDef,
+  WEB_SESSION_COOKIE,
 } from '@meetless/api';
-import { bearerToken, isAuthFailure, type Authenticator, type Principal } from '../auth';
+import { tokenKind } from '../accounts/secrets';
+import { bearerToken, isAuthFailure, type Authenticator, type AuthFailure, type Principal } from '../auth';
+import { checkCsrf, parseCookies } from '../web/cookies';
 import type { OfficeViewer } from '../office/onlyoffice';
 import type { RateLimiter } from './ratelimit';
 import type { ServerConfig } from '../server';
@@ -39,6 +42,7 @@ export const API_STATUS: Record<string, number> = {
   TOKEN_REVOKED: 401,
   NOT_AUTHORISED: 403,
   NOT_A_MEMBER: 403,
+  CSRF_FAILED: 403,
   NOT_FOUND: 404,
   INVITE_INVALID: 404,
   INVITE_USED: 409,
@@ -76,27 +80,56 @@ export function errorResponse(err: unknown): { status: number; body: ApiErrorBod
 }
 
 /**
- * The one place a request's bearer token is checked and an authentication failure is
- * produced. Every authenticated surface calls it: `defineRoute`, the /v1 routes and the
- * websocket upgrade in http.ts, and `/mcp`. Throws `ApiError` UNAUTHENTICATED or
- * TOKEN_REVOKED, or RATE_LIMITED (contract §12.8) once `limiter` is over the limit for
- * `req.ip` (Fastify's `request.ip`, proxy-aware by the `trustProxy` hop count). A valid token always
- * passes, uncounted. A request with no token at all does not count either (nothing to
- * guess), and fails plainly even past the limit; `limiter` is omitted on surfaces (none
- * today) that do not rate-limit sign-in.
+ * The one place a request's token is checked and an authentication failure is produced.
+ * Every authenticated surface calls it: `defineRoute`, the /v1 routes and the websocket
+ * upgrade in http.ts, and `/mcp`. Throws `ApiError` UNAUTHENTICATED or TOKEN_REVOKED, or
+ * RATE_LIMITED (contract §12.8) once `limiter` is over the limit for `req.ip` (Fastify's
+ * `request.ip`, proxy-aware by the `trustProxy` hop count). A valid token always passes,
+ * uncounted. A request with no token at all does not count either (nothing to guess), and
+ * fails plainly even past the limit; `limiter` is omitted on surfaces (none today) that do
+ * not rate-limit sign-in.
+ *
+ * The web session cookie (design 2026-11-25 §3): only with `opts.cookie` (routes reachable
+ * from the app, the /v1 sync and blob routes, `/v1/ws`; never `/mcp` or MCP-only routes) and
+ * only when there is no `Authorization` header (the bearer path is unchanged and always wins).
+ * The cookie must hold a personal token (the web session mints only those); anything else in it,
+ * or a bad or revoked one, fails and counts on `limiter` like a bad bearer token. A cookie
+ * principal on a write then passes `checkCsrf` (`opts.cfg` gives the agent URL's origin), or
+ * the call fails CSRF_FAILED. The answer's `via` says which path it came by.
  */
 export async function authenticateRequest(
   auth: Authenticator,
-  req: { headers: IncomingHttpHeaders; ip: string },
+  req: { headers: IncomingHttpHeaders; ip: string; method?: string; protocol?: string; host?: string },
   limiter?: RateLimiter,
+  opts: { cookie?: boolean; cfg?: ServerConfig } = {},
 ): Promise<Principal> {
-  const r = await auth.authenticate(req.headers.authorization);
-  if (!isAuthFailure(r)) return r;
-  if (limiter && bearerToken(req.headers.authorization) !== null) {
-    const hit = limiter.hit(req.ip);
-    if (!hit.ok) throw new ApiError('RATE_LIMITED', { retryAfter: hit.retryAfterSec });
+  const fail = (r: AuthFailure, counted: boolean): never => {
+    throw counted ? signInFailure(limiter, req.ip, r.error) : new ApiError(r.error);
+  };
+  const header = req.headers.authorization;
+  if (header === undefined && opts.cookie) {
+    const token = parseCookies(req.headers.cookie)[WEB_SESSION_COOKIE];
+    if (token !== undefined) {
+      const r = tokenKind(token) === 'personal' ? await auth.authenticateToken(token) : ({ error: 'UNAUTHENTICATED' } as const);
+      if (isAuthFailure(r)) return fail(r, true);
+      // No method means nothing is known about the request: checked as a write (fail closed).
+      checkCsrf({ method: req.method ?? '', headers: req.headers, protocol: req.protocol ?? '', host: req.host ?? '' }, opts.cfg ?? { agentUrl: null });
+      return { ...r, via: 'cookie' };
+    }
   }
-  throw new ApiError(r.error);
+  const r = await auth.authenticate(header);
+  if (isAuthFailure(r)) return fail(r, bearerToken(header) !== null);
+  return { ...r, via: 'bearer' };
+}
+
+/**
+ * A failed sign-in for `ip` (a bad or revoked token, however it arrived): counts one failure
+ * on `limiter` and answers `code`, or RATE_LIMITED (with `retryAfter`) once over the limit.
+ */
+export function signInFailure(limiter: RateLimiter | undefined, ip: string, code: AuthFailure['error']): ApiError {
+  const hit = limiter?.hit(ip);
+  if (hit && !hit.ok) return new ApiError('RATE_LIMITED', { retryAfter: hit.retryAfterSec });
+  return new ApiError(code);
 }
 
 /** Personal and dev tokens act as the user; an agent token is refused (NOT_AUTHORISED) outside `auth: 'agent'` routes and `/mcp`. */
@@ -245,7 +278,8 @@ export function defineRoute<K extends ApiName>(app: FastifyInstance, deps: ApiDe
       const st: CallState = { p: null, req: null };
       calls.set(http, st);
       if (route.auth === 'none') return;
-      st.p = await authenticateRequest(deps.auth, http, deps.rateLimits.signIn);
+      // The web session cookie is honoured only on routes the app reaches (design 2026-11-25 §3).
+      st.p = await authenticateRequest(deps.auth, http, deps.rateLimits.signIn, { cookie: route.from.includes('app'), cfg: deps.cfg });
       if (route.auth === 'user') requireUserPrincipal(st.p);
     },
     handler: async (http) => {

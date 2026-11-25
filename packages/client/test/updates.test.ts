@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -44,5 +44,20 @@ describe('updates over the bridge', () => {
     expect(await node.updatesInstall()).toEqual({ ok: false, code: 'UPDATE_CHECKSUM' });
     expect(calls).toEqual(['check', 'install']);
     await node.close();
+  });
+});
+
+describe('local files', () => {
+  it('the data folder is 0700 and an old 0644 session.json becomes 0600 on open', async () => {
+    const d = join(dir, 'modes');
+    const node = await ClientNode.open({ dataDir: d });
+    expect(statSync(d).mode & 0o777).toBe(0o700);
+    await node.close();
+    const old = join(dir, 'old');
+    mkdirSync(old);
+    writeFileSync(join(old, 'session.json'), '{}', { mode: 0o644 });
+    const again = await ClientNode.open({ dataDir: old });
+    expect(statSync(join(old, 'session.json')).mode & 0o777).toBe(0o600);
+    await again.close();
   });
 });

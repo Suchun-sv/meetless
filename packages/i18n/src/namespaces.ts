@@ -31,6 +31,8 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   ai: 'base',
   res: 'base',
   upd: 'base',
+  // web and phone (design 2026-11-25)
+  web: 'base',
   // S (server) — new; only if the server needs user-visible text
   srv: 'S',
   // U1 (shell and dashboards)

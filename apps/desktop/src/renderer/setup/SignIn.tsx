@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SUPPORTED_LOCALES } from '@meetless/i18n';
 import { useApp, type AppApi } from '../app/AppContext';
+import { isWeb } from '../ui/DesktopOnly';
 import { Btn } from '../ui/primitives';
 import { LANG_LABEL } from '../shell/Sidebar';
 import { inviteFormError, signInMessage } from './model';
@@ -25,7 +26,11 @@ export function SignIn() {
   const app = useApp();
   const { bridge, t, locale, setLocale } = app;
   const q = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
-  const [server, setServer] = useState(q.get('server') ?? 'http://127.0.0.1:4870');
+  // On the web the server is the page's own origin: no server field (design 2026-11-25 §6).
+  const web = isWeb(app);
+  const origin = typeof location === 'undefined' ? '' : location.origin;
+  const [typedServer, setServer] = useState(q.get('server') ?? 'http://127.0.0.1:4870');
+  const server = web ? origin : typedServer;
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [token, setToken] = useState('');
@@ -53,7 +58,7 @@ export function SignIn() {
   const signInWithToken = async () => {
     if (busy) return;
     // Never fail silently: an empty token, a bad URL, a timeout or a transport error all show a reason.
-    if (!token.trim()) return setError(t('signin.tokenMissing'));
+    if (!token.trim()) return setError(web ? t('web.tokenMissing') : t('signin.tokenMissing'));
     setBusy(true);
     setError(null);
     try {
@@ -73,20 +78,22 @@ export function SignIn() {
           <span className="brand-mark" />
           {t('app.name')}
         </div>
-        <label className="signin-field">
-          <span className="small muted">{t('signin.server')}</span>
-          <input
-            className="inp"
-            value={server}
-            onChange={(e) => setServer(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return;
-              e.preventDefault();
-              void signInWithToken();
-            }}
-            data-testid="signin-server"
-          />
-        </label>
+        {!web && (
+          <label className="signin-field">
+            <span className="small muted">{t('signin.server')}</span>
+            <input
+              className="inp"
+              value={server}
+              onChange={(e) => setServer(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                void signInWithToken();
+              }}
+              data-testid="signin-server"
+            />
+          </label>
+        )}
 
         <form
           className="signin-form"
@@ -117,11 +124,24 @@ export function SignIn() {
             void signInWithToken();
           }}
         >
-          <h2 className="muted">{t('signin.devTitle')}</h2>
-          <p className="small tone-warning">{t('signin.devOnly')}</p>
+          {web ? (
+            <h2 className="muted">{t('signin.tokenTitle')}</h2>
+          ) : (
+            <>
+              <h2 className="muted">{t('signin.devTitle')}</h2>
+              <p className="small tone-warning">{t('signin.devOnly')}</p>
+            </>
+          )}
           <label className="signin-field">
-            <span className="small muted">{t('signin.token')}</span>
-            <input className="inp" value={token} onChange={(e) => setToken(e.target.value)} placeholder={t('signin.tokenHint')} data-testid="signin-token" autoComplete="off" />
+            <span className="small muted">{web ? t('web.tokenLabel') : t('signin.token')}</span>
+            <input
+              className="inp"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={web ? t('web.tokenHint') : t('signin.tokenHint')}
+              data-testid="signin-token"
+              autoComplete="off"
+            />
           </label>
           <Btn kind="primary" type="submit" disabled={busy} testId="signin-submit">
             {busy ? t('signin.busyShort') : t('signin.submit')}

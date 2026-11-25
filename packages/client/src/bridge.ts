@@ -62,10 +62,10 @@ export interface ClientSnapshot {
   locale: string | null;
   /** OS preference list, for the initial locale choice. */
   systemLocales: string[];
-  /** Which local store holds the cache ("sqlite"). */
+  /** Which local store holds the cache ("sqlite"; "memory" on the web, refetched on every page load). */
   cacheKind: string;
-  /** Identifies how the renderer is connected: "electron" or "dev-bridge" (test/dev only). */
-  host: 'electron' | 'dev-bridge';
+  /** Identifies how the renderer is connected: "electron", "dev-bridge" (test/dev only) or "web" (the server's own page). */
+  host: 'electron' | 'dev-bridge' | 'web';
 }
 
 export type BridgeEvent =

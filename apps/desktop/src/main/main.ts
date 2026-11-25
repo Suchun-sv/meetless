@@ -2,6 +2,7 @@ import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { isWebUrl } from '@meetless/core';
 import { BRIDGE_METHODS, ClientNode, createFileLog, type BridgeEvent, type BridgeMethod, type FileLog, type MeetlessBridge } from '@meetless/client';
 import { invokeChannel, PUSH_CHANNEL } from '../shared/ipc';
 import { BUILD_CHANNEL, BUILD_LABEL, BUILD_NOTE } from './build-info';
@@ -21,7 +22,7 @@ import { runSmokeChecks } from './smoke-checks';
  * - MEETLESS_LAUNCH_INACTIVE=1  show the window without activating the app (acceptance runs)
  * - MEETLESS_LOG_DIR            folder of the rotating diagnostics log; default app.getPath('logs')
  * - MEETLESS_LOG_FILE           also append the main-process log lines to this file
- * - MEETLESS_RENDERER_URL       dev only: load the renderer from the Vite dev server
+ * - MEETLESS_RENDERER_URL       dev only (ignored when packaged): load the renderer from the Vite dev server
  * - MEETLESS_UPDATE_BASE        dev only: look for releases here instead of GitHub (docs/RELEASE.md)
  */
 const SMOKE = process.env.MEETLESS_SMOKE === '1';
@@ -117,6 +118,19 @@ function runApp(): void {
   let win: BrowserWindow | null = null;
   const logDir = () => process.env.MEETLESS_LOG_DIR ?? app.getPath('logs');
 
+  // A packaged app always loads its own renderer: an environment variable must not be able to give
+  // a remote page the preload bridge.
+  const rendererUrl = app.isPackaged ? undefined : process.env.MEETLESS_RENDERER_URL;
+  const rendererOrigin = rendererUrl ? new URL(rendererUrl).origin : null;
+  const ownPage = (url: string): boolean => {
+    if (!rendererOrigin) return url.startsWith('file://');
+    try {
+      return new URL(url).origin === rendererOrigin;
+    } catch {
+      return false;
+    }
+  };
+
   async function createWindow(): Promise<void> {
     win = new BrowserWindow({
       width: 1440,
@@ -140,13 +154,15 @@ function runApp(): void {
         log('window shown inactive', { focused: w.isFocused() });
       });
     }
-    // Links open in the system browser, never inside the app window.
+    // Links open in the system browser, never inside the app window, and only http(s): any other
+    // scheme (file:, smb:, protocol handlers) would be handed straight to the OS.
     win.webContents.setWindowOpenHandler(({ url }) => {
-      void shell.openExternal(url);
+      if (isWebUrl(url)) void shell.openExternal(url);
+      else log('blocked link', { scheme: url.split(':', 1)[0]?.slice(0, 20) ?? '' });
       return { action: 'deny' };
     });
     win.webContents.on('will-navigate', (e, url) => {
-      if (!url.startsWith(process.env.MEETLESS_RENDERER_URL ?? 'file://')) e.preventDefault();
+      if (!ownPage(url)) e.preventDefault();
     });
     // OnlyOffice viewer (U3): sub-frames may load only the DocumentServer origin, or about:blank.
     win.webContents.on('will-frame-navigate', (e) => {
@@ -155,7 +171,7 @@ function runApp(): void {
     win.webContents.on('did-finish-load', () => log('renderer loaded'));
     win.webContents.on('render-process-gone', (_e, d) => logError('renderer gone', d));
     log('window created', { inactive: INACTIVE });
-    if (process.env.MEETLESS_RENDERER_URL) await win.loadURL(process.env.MEETLESS_RENDERER_URL);
+    if (rendererUrl) await win.loadURL(rendererUrl);
     else await win.loadFile(join(__dirname, '../renderer/index.html'));
   }
 

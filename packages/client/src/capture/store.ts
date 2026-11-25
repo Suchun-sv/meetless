@@ -55,7 +55,7 @@ export class CaptureStore {
   private secrets: SecretsData;
 
   constructor(dir: string) {
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     this.dataFile = join(dir, 'capture.json');
     this.secretsFile = join(dir, 'secrets.json');
     this.data = readJson(this.dataFile, emptyData());

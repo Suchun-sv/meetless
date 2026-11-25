@@ -208,7 +208,7 @@ export class CaptureService {
       if (existsSync(join(dir, '.git'))) {
         await this.exec(dir, ['pull', '--ff-only', '--quiet'], env);
       } else {
-        mkdirSync(dirname(dir), { recursive: true });
+        mkdirSync(dirname(dir), { recursive: true, mode: 0o700 });
         await this.exec(dirname(dir), ['clone', '--quiet', url, dir], env);
       }
     } catch (e) {

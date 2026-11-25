@@ -72,6 +72,14 @@ describe('configFromEnv', () => {
       expect(() => configFromEnv({ MEETLESS_TRUST_PROXY: bad }), bad).toThrow(/MEETLESS_TRUST_PROXY/);
     }
   });
+
+  it('MEETLESS_WEB_DIR defaults to <repoRoot>/apps/desktop/dist/renderer, off disables it, and a custom path is resolved', () => {
+    const def = configFromEnv({});
+    expect(def.webDir).toBe(`${def.repoRoot}/apps/desktop/dist/renderer`);
+    expect(configFromEnv({ MEETLESS_WEB_DIR: 'off' }).webDir).toBeNull();
+    expect(configFromEnv({ MEETLESS_WEB_DIR: '/tmp/some-renderer-build' }).webDir).toBe('/tmp/some-renderer-build');
+    expect(configFromEnv({ MEETLESS_WEB_DIR: 'relative/renderer' }).webDir).toBe(`${process.cwd()}/relative/renderer`);
+  });
 });
 
 describe('dev auth off', () => {

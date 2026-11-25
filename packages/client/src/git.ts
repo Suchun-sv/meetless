@@ -52,6 +52,12 @@ export class GitError extends Error {
   }
 }
 
+/**
+ * A repo the user picks can set `diff.external` or a `textconv` driver in its own `.git/config`;
+ * git would run that command when we diff. Every diff and show passes these.
+ */
+const NO_EXT = ['--no-ext-diff', '--no-textconv'];
+
 function git(cwd: string, args: string[], maxBuffer = 8 * 1024 * 1024): Promise<string> {
   return new Promise((res, rej) => {
     execFile('git', ['-c', 'core.quotepath=off', ...args], { cwd, maxBuffer, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' } }, (err, stdout) => {
@@ -140,8 +146,8 @@ export class GitRepos {
     const h = await this.resolve(id, head);
     const b = base ? await this.resolve(id, base) : null;
     const d = this.dir(id);
-    const args = b ? ['diff', '--numstat', '-M', b, h] : ['show', '--numstat', '--format=', h];
-    const status = b ? ['diff', '--name-status', '-M', b, h] : ['show', '--name-status', '--format=', h];
+    const args = b ? ['diff', ...NO_EXT, '--numstat', '-M', b, h] : ['show', ...NO_EXT, '--numstat', '--format=', h];
+    const status = b ? ['diff', ...NO_EXT, '--name-status', '-M', b, h] : ['show', ...NO_EXT, '--name-status', '--format=', h];
     const [num, st] = await Promise.all([git(d, args), git(d, status)]);
     const statusOf = new Map<string, string>();
     for (const line of st.split('\n').filter(Boolean)) {
@@ -162,13 +168,13 @@ export class GitRepos {
   async patch(id: string, base: string | null, head: string, path: string): Promise<{ patch: string; truncated: boolean }> {
     const h = await this.resolve(id, head);
     const b = base ? await this.resolve(id, base) : null;
-    const out = await git(this.dir(id), b ? ['diff', '-M', b, h, '--', checkPath(path)] : ['show', '--format=', h, '--', checkPath(path)]);
+    const out = await git(this.dir(id), b ? ['diff', ...NO_EXT, '-M', b, h, '--', checkPath(path)] : ['show', ...NO_EXT, '--format=', h, '--', checkPath(path)]);
     return out.length > LIMITS.patchBytes ? { patch: out.slice(0, LIMITS.patchBytes), truncated: true } : { patch: out, truncated: false };
   }
 
   async file(id: string, commit: string, path: string): Promise<{ content: string | null; truncated: boolean }> {
     const c = await this.resolve(id, commit);
-    const buf = await git(this.dir(id), ['show', `${c}:${checkPath(path)}`], 32 * 1024 * 1024).catch(() => null);
+    const buf = await git(this.dir(id), ['show', ...NO_EXT, `${c}:${checkPath(path)}`], 32 * 1024 * 1024).catch(() => null);
     if (buf === null) return { content: null, truncated: false };
     if (buf.includes('\0')) return { content: null, truncated: false };
     return buf.length > LIMITS.fileBytes ? { content: buf.slice(0, LIMITS.fileBytes), truncated: true } : { content: buf, truncated: false };

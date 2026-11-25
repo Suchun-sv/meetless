@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CAPTURE_CODES, type CaptureSource, type CaptureStatus, type CommitInfo, type MeetlessBridge } from '@meetless/client/bridge';
-import type { Artifact, Id } from '@meetless/core';
+import { isWebUrl, type Artifact, type Id } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
+import { isWeb } from '../ui/DesktopOnly';
 import { useApp, type AppApi } from '../app/AppContext';
 import { Btn } from '../ui/primitives';
 import { sourceRow, type SourceRow } from './source-model';
@@ -83,8 +84,11 @@ export function useCaptureRun(projectId: Id): { running: boolean; run(opts?: { a
 
 /** The per-artifact (or, with no `artifactIds`, whole-project) capture button (brief). */
 export function CaptureButton({ projectId, artifactIds, testId }: { projectId: Id; artifactIds?: Id[]; testId: string }) {
-  const { t } = useApp();
+  const app = useApp();
+  const { t } = app;
   const { running, run } = useCaptureRun(projectId);
+  // Capture runs on the local machine: no button on the web (design 2026-11-25 §6).
+  if (isWeb(app)) return null;
   return (
     <Btn kind="sm" testId={testId} disabled={running} onClick={() => void run(artifactIds ? { artifactIds } : undefined)}>
       {running ? t('cap.running') : t('cap.btn')}
@@ -159,7 +163,7 @@ export function createNotionConnector(
     },
     connect() {
       void bridge.notionConnect().then((r) => {
-        if (destroyed || !r.ok) return;
+        if (destroyed || !r.ok || !isWebUrl(r.authorizeUrl)) return;
         window.open(r.authorizeUrl);
         setWaiting(true);
         stopPoll?.();

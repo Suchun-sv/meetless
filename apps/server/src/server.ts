@@ -49,8 +49,9 @@ export interface ServerConfig {
   trustProxy: number;
   /**
    * Failed-attempt rate limits, keyed by client IP (contract §12.8): `signIn` counts failed
-   * bearer-token authentication (`authenticateRequest`, every `/v1/*` route, `/mcp`, the
-   * websocket upgrade); `redeem` counts failed `invites.redeem` calls. From
+   * bearer-token and web-session-cookie authentication (`authenticateRequest`, every `/v1/*`
+   * route, `/mcp`, the websocket upgrade, a `{ token }` web sign-in); `redeem` counts failed
+   * `invites.redeem` calls and failed invite web sign-ins. From
    * `MEETLESS_RATE_SIGNIN` / `MEETLESS_RATE_REDEEM` (`<limit>/<seconds>`), defaulting to
    * 10 failures per 5 minutes and 10 per 10 minutes.
    */
@@ -69,6 +70,12 @@ export interface ServerConfig {
   sample?: { locale: 'zh-CN' | 'en'; me: Id } | null;
   /** Repo root holding the prototype data (`MEETLESS_REPO_ROOT`). */
   repoRoot?: string;
+  /**
+   * Where `registerWebStatic` serves the renderer build from (design 2026-11-25 §4), from
+   * `MEETLESS_WEB_DIR` (default `<repoRoot>/apps/desktop/dist/renderer`); `null` (`off`)
+   * disables it, so `/` falls through to the server's normal 404.
+   */
+  webDir: string | null;
   /**
    * OnlyOffice view config and file tickets (Task 8; contract §12.6, §12.13). `url` is
    * DocumentServer's own base URL (`off` disables preview entirely); `jwtSecret` signs the
@@ -150,6 +157,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServerConfi
     env,
     sample: sampleFromEnv(env),
     repoRoot,
+    webDir: env.MEETLESS_WEB_DIR === 'off' ? null : resolve(env.MEETLESS_WEB_DIR ?? join(repoRoot, 'apps/desktop/dist/renderer')),
     onlyoffice: {
       url: env.MEETLESS_ONLYOFFICE_URL === 'off' ? null : stripTrailingSlashes(env.MEETLESS_ONLYOFFICE_URL ?? DEFAULT_ONLYOFFICE_URL),
       jwtSecret: env.MEETLESS_ONLYOFFICE_JWT_SECRET || onlyofficeJwtSecretFromEnvFile(repoRoot),
@@ -220,7 +228,7 @@ export async function startServer(cfg: ServerConfig): Promise<RunningServer> {
   const office = officeCfg ? new OfficeWorker(service, officeCfg) : null;
   office?.start();
   const pdfTextCfg = cfg.workers?.pdfText ?? true;
-  const pdfText = pdfTextCfg === false ? null : new PdfTextWorker(service, pdfTextCfg === true ? undefined : pdfTextCfg);
+  const pdfText = pdfTextCfg === false ? null : new PdfTextWorker(service, { attemptsDir: join(cfg.dataDir, 'pdf-text-attempts'), ...(pdfTextCfg === true ? {} : pdfTextCfg) });
   pdfText?.start();
   const accounts = stores.accounts;
   const auth = new Authenticator(accounts, cfg.devAuth ? new DevAuth(devUsers) : null, cfg.now);

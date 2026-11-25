@@ -1,8 +1,9 @@
 {
   "name": "@meetless/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Meetless desktop client: Electron main (sync + local cache) and React renderer",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "dependencies": {
     "@meetless/api": "workspace:*",
@@ -51,6 +52,5 @@
     "package:linux": "node scripts/build-main.mjs && vite build && node scripts/stage-app.mjs && electron-builder --linux --config electron-builder.config.cjs --publish never",
     "smoke:packaged": "node scripts/smoke-packaged.mjs",
     "test:mac-gui": "node e2e-electron/mac-packaged.mjs"
-  },
-  "license": "PolyForm-Noncommercial-1.0.0"
+  }
 }

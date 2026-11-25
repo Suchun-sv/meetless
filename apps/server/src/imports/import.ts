@@ -1,4 +1,4 @@
-import { DETECTOR_ID, detectExtracts, projectNeeds, shareableView, toParagraphs } from '@meetless/core';
+import { DETECTOR_ID, detectExtracts, INPUT_KINDS, projectNeeds, shareableView, toParagraphs } from '@meetless/core';
 import type { InputKind, Requester } from '@meetless/core';
 import type { ApiRequest, ApiResponse } from '@meetless/api';
 import type { Principal } from '../auth';
@@ -42,6 +42,8 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
   const inputId = reqString(req.inputId, 'inputId');
   const title = reqString(req.title, 'title');
   const kind = reqString(req.kind, 'kind') as InputKind;
+  // Checked before any blob is read or parsed (an unknown kind used to fall into the PDF parser).
+  if (!(INPUT_KINDS as readonly string[]).includes(kind)) throw new ApiError('BAD_REQUEST', { field: 'kind' });
   const blobHash = optString(req.blobHash, 'blobHash');
   const given = optString(req.text, 'text');
   const from = optObject(req.from, 'from') as Requester | null;

@@ -1,15 +1,22 @@
 # Installers for macOS, Windows and Linux, built on GitHub's machines. Adapted from Gleeok's
 # .github/workflows/release.yml (same author), without its castLabs EVS steps: Meetless uses stock Electron.
 #
-# Push a tag like v0.2.0: the version comes from the tag, a draft release collects the three builds
-# and is published once all three succeed (the in-app updater then offers it). Run it by hand
-# (Actions, Release, Run workflow) to build without publishing; the files are kept as artifacts.
+# Push a tag like v0.2.0: the version comes from the tag, a draft release is made, the three builds
+# run with no write access and no token, and a separate publish job (no checkout, no dependencies)
+# downloads their files, re-hashes them against the update manifests, uploads them to the draft and
+# publishes it (the in-app updater then offers it). Run it by hand (Actions, Release, Run workflow)
+# from a branch to build without publishing; the files are kept as artifacts. A hand run on a tag
+# is refused.
 #
 # Secrets (Settings, Secrets and variables, Actions), see docs/RELEASE.md:
 #   MAC_CERT_P12, MAC_CERT_PASSWORD  a self-signed code-signing certificate (base64 PKCS#12, named
 #                                  "Meetless Self-Signed"): every version keeps the same identity, so
-#                                  the macOS keychain keeps trusting the app across updates. Tags
-#                                  require it; a hand-run build without it is signed ad hoc.
+#                                  the macOS keychain keeps trusting the app across updates, and the
+#                                  updater accepts only bundles signed by it. Only the macOS packaging
+#                                  step sees them. Tags require them; a hand-run build without them is
+#                                  signed ad hoc.
+#
+# Actions are pinned by commit SHA (the tag each SHA had is in the comment).
 name: Release
 
 on:
@@ -18,12 +25,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+# One release run at a time; a new one waits instead of cancelling a half-published release.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   draft:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Draft release for the tag
         env:
@@ -32,8 +46,9 @@ jobs:
 
   build:
     needs: draft
-    # A tag waits for its draft; a hand-run build has none to wait for.
-    if: always() && (needs.draft.result == 'success' || needs.draft.result == 'skipped')
+    # A tag waits for its draft; a hand-run build from a branch has none to wait for. A hand run on
+    # a tag ref is refused: only a tag push publishes.
+    if: ${{ !cancelled() && (needs.draft.result == 'success' || (needs.draft.result == 'skipped' && !startsWith(github.ref, 'refs/tags/'))) }}
     strategy:
       fail-fast: false
       matrix:
@@ -45,17 +60,20 @@ jobs:
           - os: ubuntu-latest
             target: --linux
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     env:
-      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
-      MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+      RELEASE: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       # The version comes from package.json's packageManager field (pnpm 12).
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 26
           cache: pnpm
@@ -76,48 +94,59 @@ jobs:
           pnpm run build
           node scripts/stage-app.mjs
 
-      - name: Code-signing certificate (macOS)
-        if: runner.os == 'macOS' && env.MAC_CERT_P12 != ''
+      - name: Package
+        if: runner.os != 'macOS'
+        working-directory: apps/desktop
         env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm exec electron-builder ${{ matrix.target }} --config electron-builder.config.cjs --publish never
+
+      # The only step that sees the certificate. It goes into a throw-away keychain with a random
+      # password, as a key that cannot be exported, and the keychain is deleted when the step ends.
+      - name: Package and sign (macOS)
+        if: runner.os == 'macOS'
+        working-directory: apps/desktop
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
-          kc="$RUNNER_TEMP/meetless.keychain-db"
-          security create-keychain -p ci "$kc"
-          security set-keychain-settings "$kc"
-          security unlock-keychain -p ci "$kc"
-          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
-          security import "$RUNNER_TEMP/id.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          if [ -z "$MAC_CERT_P12" ]; then
+            if [ "$RELEASE" = true ]; then
+              echo "MAC_CERT_P12 is not set: a release must carry the Meetless Self-Signed identity (docs/RELEASE.md)" >&2
+              exit 1
+            fi
+            unset MAC_CERT_P12 MAC_CERT_PASSWORD
+            pnpm exec electron-builder --mac --config electron-builder.config.cjs --publish never
+            exit 0
+          fi
+          kc="$RUNNER_TEMP/meetless-$RANDOM$RANDOM.keychain-db"
+          kcpass="$(openssl rand -hex 24)"
+          cleanup() {
+            security delete-keychain "$kc" >/dev/null 2>&1 || true
+            rm -f "$RUNNER_TEMP/id.p12" "$RUNNER_TEMP/cert.pem"
+          }
+          trap cleanup EXIT
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          (umask 077; printf '%s' "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/id.p12")
+          security import "$RUNNER_TEMP/id.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -x -T /usr/bin/codesign
           rm -f "$RUNNER_TEMP/id.p12"
-          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$kc" >/dev/null
+          unset MAC_CERT_P12 MAC_CERT_PASSWORD
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpass" "$kc" >/dev/null
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
           # Trusted for code signing, or codesign will not use a self-signed identity.
           security find-certificate -c "Meetless Self-Signed" -p "$kc" > "$RUNNER_TEMP/cert.pem"
           sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
-          echo "MAC_SIGN_IDENTITY=Meetless Self-Signed" >> "$GITHUB_ENV"
-          echo "MAC_SIGN_KEYCHAIN=$kc" >> "$GITHUB_ENV"
+          MAC_SIGN_IDENTITY="Meetless Self-Signed" MAC_SIGN_KEYCHAIN="$kc" \
+            pnpm exec electron-builder --mac --config electron-builder.config.cjs --publish never
+          for app in release/dist/mac*/Meetless.app; do codesign -dv "$app" 2>&1 | grep -E 'Identifier|Authority|Signature' || true; done
 
-      - name: A release is signed with the Meetless identity
-        if: runner.os == 'macOS' && env.RELEASE == 'true' && env.MAC_CERT_P12 == ''
-        run: |
-          echo "MAC_CERT_P12 is not set: a release must carry the Meetless Self-Signed identity (docs/RELEASE.md)" >&2
-          exit 1
-
-      - name: Package
-        working-directory: apps/desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder ${{ matrix.target }} --config electron-builder.config.cjs --publish "$([ "$RELEASE" = true ] && echo always || echo never)"
-
-      - name: Signature (macOS)
-        if: runner.os == 'macOS'
-        working-directory: apps/desktop
-        run: for app in release/dist/mac*/Meetless.app; do codesign -dv "$app" 2>&1 | grep -E 'Identifier|Authority|Signature' || true; done
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: meetless-${{ runner.os }}
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             apps/desktop/release/dist/*.zip
             apps/desktop/release/dist/*.dmg
@@ -127,12 +156,53 @@ jobs:
             apps/desktop/release/dist/*.yml
             !apps/desktop/release/dist/builder-debug.yml
 
+  # No checkout and no dependencies: only GitHub's own download action and gh run with write access.
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Publish the draft
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          pattern: meetless-*
+          merge-multiple: true
+
+      - name: Re-hash every file against the update manifests
+        working-directory: dist
+        run: |
+          python3 - <<'PY'
+          import base64, glob, hashlib, os, re, sys
+          ymls = sorted(glob.glob('latest*.yml'))
+          need = {'latest-mac.yml', 'latest.yml', 'latest-linux.yml'}
+          if set(ymls) != need:
+              sys.exit(f'manifests: expected {sorted(need)}, found {ymls}')
+          for y in ymls:
+              text = open(y, encoding='utf-8').read()
+              files = re.findall(r'^\s*-\s+url:\s*(\S+)\s*\n\s+sha512:\s*(\S+)\s*\n\s+size:\s*(\d+)', text, re.M)
+              if not files:
+                  sys.exit(f'{y}: no files')
+              for url, sha, size in files:
+                  if not re.fullmatch(r'[A-Za-z0-9._-]+', url) or not os.path.isfile(url):
+                      sys.exit(f'{y}: missing or bad file {url}')
+                  data = open(url, 'rb').read()
+                  if len(data) != int(size) or base64.b64encode(hashlib.sha512(data).digest()).decode() != sha:
+                      sys.exit(f'{y}: {url} does not match its manifest')
+                  print(f'ok {url} {size}')
+          PY
+
+      - name: Upload to the draft and publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest
+        working-directory: dist
+        run: |
+          tag="$GITHUB_REF_NAME"
+          # Assets are only ever added to a draft: a published release is never changed.
+          [ "$(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft)" = true ] || { echo "$tag is not a draft" >&2; exit 1; }
+          gh release upload "$tag" -R "$GITHUB_REPOSITORY" --clobber ./*
+          # "Latest" only for the highest stable version, so re-running an old tag cannot serve old manifests.
+          highest="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate -q '.[] | select(.draft == false) | .tag_name' | { cat; echo "$tag"; } | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+          if [ "$highest" = "$tag" ]; then latest=--latest; else latest=--latest=false; fi
+          gh release edit "$tag" -R "$GITHUB_REPOSITORY" --draft=false "$latest"

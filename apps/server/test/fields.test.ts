@@ -143,7 +143,7 @@ describe('request field types (I1)', () => {
       rateLimits: { signIn: new RateLimiter(s.cfg.rateLimits.signIn, Date.now), redeem: new RateLimiter(s.cfg.rateLimits.redeem, Date.now) },
       skillMarkdown: 'guide',
     };
-    const p: Principal = { userId: IDS.alex, kind: 'dev', tokenId: null, label: null };
+    const p: Principal = { userId: IDS.alex, kind: 'dev', tokenId: null, label: null, via: 'bearer' };
     const head = s.svc.head;
     const handler = HANDLERS[d.route] as (ctx: unknown) => Promise<unknown>;
     const err = await handler({ p, req: d.req, http: { headers: {} }, deps }).then(

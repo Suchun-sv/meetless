@@ -3,14 +3,20 @@ import type { Duplex } from 'node:stream';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { isDomainError, type Id, type Seq } from '@meetless/core';
+import { WEB_SESSION_COOKIE } from '@meetless/api';
 import { ApiError, authenticateRequest, errorResponse, registerApiRoutes, requireUserPrincipal, type ApiDeps } from './api/index';
 import { RateLimiter } from './api/ratelimit';
 import { loadSkillMarkdown, skillPathFromEnv } from './accounts/guide';
 import { registerMcp } from './mcp/server';
-import { isAuthFailure, type Principal } from './auth';
+import { bearerToken, isAuthFailure, type Principal } from './auth';
 import { OfficeViewer } from './office/onlyoffice';
 import { OfficeTickets } from './office/tickets';
 import type { Command, SyncService } from './service';
+import { originAllowed, parseCookies, rawRequestTarget } from './web/cookies';
+import { registerWebSession } from './web/session';
+import { registerWebStatic } from './web/static';
+import { registerClientErrors } from './web/client-error';
+import { isOfficePath, proxyOfficeUpgrade, registerOfficeProxy } from './web/office-proxy';
 
 /** Messages on /v1/ws. Client -> server: subscribe. Server -> client: hello / events / synced / reset / error. */
 export type ClientMessage = { type: 'subscribe'; after: Seq; epoch?: Id | null };
@@ -23,6 +29,9 @@ export type ServerMessage =
   | { type: 'error'; code: string };
 
 const READ_DENIED = new Set(['NOT_A_MEMBER', 'NOT_AUTHORISED']);
+
+/** A request (headers and body) that has not fully arrived after this long is dropped (Fastify's default is never). */
+export const REQUEST_TIMEOUT_MS = 5 * 60_000;
 
 /** Closes a websocket whose token was revoked. */
 export const WS_TOKEN_REVOKED = 4401;
@@ -81,7 +90,13 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const skillMarkdown = opts.skillMarkdown ?? loadSkillMarkdown(skillPathFromEnv(cfg.env ?? {}));
   // forceCloseConnections: on shutdown drop keep-alive and in-flight sockets; clients retry idempotently.
   // trustProxy: behind `cfg.trustProxy` reverse proxies, request.ip is the client's address (X-Forwarded-For, by hop count).
-  const app = Fastify({ logger: cfg.logger, bodyLimit: 1024 * 1024, forceCloseConnections: true, trustProxy: fastifyTrustProxy(cfg.trustProxy) });
+  const app = Fastify({
+    logger: cfg.logger,
+    bodyLimit: 1024 * 1024,
+    forceCloseConnections: true,
+    trustProxy: fastifyTrustProxy(cfg.trustProxy),
+    requestTimeout: REQUEST_TIMEOUT_MS,
+  });
 
   app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: opts.maxBlobBytes ?? 200 * 1024 * 1024 }, (_req, body, done) =>
     done(null, body),
@@ -96,8 +111,13 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   // One OfficeViewer per server, so its 30s availability cache actually caches across requests.
   deps.officeViewer = new OfficeViewer(deps, opts.officeTickets ?? new OfficeTickets(), opts.officeFetch);
 
-  /** The /v1 sync routes act as the user: personal and dev tokens only (an agent token gets 403). */
-  const userOf = async (req: FastifyRequest): Promise<Principal> => requireUserPrincipal(await authenticateRequest(auth, req, rateLimits.signIn));
+  /**
+   * The /v1 sync and blob routes act as the user: personal and dev tokens only (an agent token
+   * gets 403). They are reached from the app, so the web session cookie is honoured too (with
+   * the CSRF rule on writes).
+   */
+  const userOf = async (req: FastifyRequest): Promise<Principal> =>
+    requireUserPrincipal(await authenticateRequest(auth, req, rateLimits.signIn, { cookie: true, cfg }));
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof ApiError) {
@@ -124,6 +144,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   registerApiRoutes(app, deps);
   // POST /mcp: the seven MCP tools over Streamable HTTP, each running its route above.
   registerMcp(app, deps);
+  // POST / DELETE /v1/web/session: web sign-in and sign-out (the HttpOnly session cookie).
+  registerWebSession(app, deps);
 
   app.post('/v1/commands', async (req, reply) => {
     const u = await userOf(req);
@@ -140,8 +162,12 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return service.eventsFor(u.userId, after, limit, q.epoch === undefined ? undefined : q.epoch || null);
   });
 
-  app.put('/v1/blobs/:hash', async (req, reply) => {
-    const u = await userOf(req);
+  // Authenticated in onRequest, before the body is read: an anonymous upload is refused at its
+  // headers instead of after up to 200 MB have been buffered.
+  const blobUploader = new WeakMap<FastifyRequest, Principal>();
+  const blobPutAuth = async (req: FastifyRequest) => void blobUploader.set(req, await userOf(req));
+  app.put('/v1/blobs/:hash', { onRequest: blobPutAuth }, async (req, reply) => {
+    const u = blobUploader.get(req)!;
     const { hash } = req.params as { hash: string };
     if (!Buffer.isBuffer(req.body)) return reply.code(415).send({ error: { code: 'EXPECTED_OCTET_STREAM' } });
     const mediaType = String(req.headers['x-meetless-media-type'] ?? 'application/octet-stream').slice(0, 200);
@@ -157,12 +183,25 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const meta = await service.blobMeta.get(hash);
     // Same answer for "missing" and "not yours", so access checks do not leak which hashes exist.
     if (!meta || !(await service.canReadBlob(u.userId, hash))) return reply.code(403).send({ error: { code: 'NOT_AUTHORISED' } });
+    // The type is whatever the first uploader said: never sniffed, never rendered as a page.
     return reply
       .header('content-type', meta.mediaType)
       .header('content-length', String(meta.size))
       .header('cache-control', 'private, max-age=31536000, immutable')
+      .header('x-content-type-options', 'nosniff')
+      .header('content-disposition', 'attachment')
+      .header('content-security-policy', "sandbox; default-src 'none'")
       .send(service.blobFiles.read(hash));
   });
+
+  // GET /, /index.html and other files under cfg.webDir (design 2026-11-25 §4): the renderer
+  // build, with a CSP header and the web marker meta. Never shadows /v1, /mcp, /health or
+  // /office — a no-op when cfg.webDir is null.
+  registerWebStatic(app, cfg);
+  // POST /v1/client-error: boot and render errors from the web page, logged as one capped line (no auth, rate-limited).
+  registerClientErrors(app, cfg);
+  // /office/*: DocumentServer reverse-proxied for the web (design 2026-11-25 §5); its websockets go through the upgrade handler below.
+  registerOfficeProxy(app, cfg);
 
   attachWebSocket(app, service, deps);
   return app;
@@ -213,40 +252,65 @@ function attachWebSocket(app: FastifyInstance, service: SyncService, { auth, cfg
     for (const s of subs) if (s.tokenId === tokenId) s.ws.close(WS_TOKEN_REVOKED, 'TOKEN_REVOKED');
   });
 
-  /** The upgrade's principal, or null after answering 401 (unknown, revoked or agent token). */
-  const principalOf = async (req: IncomingMessage, socket: Duplex): Promise<Principal | null> => {
+  const refuse = (socket: Duplex, status: string) => {
+    socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\n\r\n`);
+    socket.destroy();
+  };
+
+  /**
+   * The upgrade's principal and the token it authenticated with, or null after answering 401
+   * (unknown, revoked or agent token), 429 or 403 (a cookie session from a missing or foreign
+   * Origin: cross-site websocket hijacking, design 2026-11-25 §3).
+   */
+  const principalOf = async (req: IncomingMessage, socket: Duplex): Promise<{ p: Principal; token: string } | null> => {
     try {
+      const target = rawRequestTarget(req, cfg.trustProxy);
       // Personal and dev tokens only, as on the /v1 sync routes; an agent token is refused like an unknown one.
-      return requireUserPrincipal(
-        await authenticateRequest(auth, { headers: req.headers, ip: clientIp(req, cfg.trustProxy) }, rateLimits.signIn),
+      const p = requireUserPrincipal(
+        await authenticateRequest(
+          auth,
+          { headers: req.headers, ip: clientIp(req, cfg.trustProxy), method: req.method, protocol: target.protocol, host: target.host },
+          rateLimits.signIn,
+          { cookie: true, cfg },
+        ),
       );
+      if (p.via === 'cookie') {
+        // A browser always sends Origin on a websocket handshake; a cookie socket without an allowed one is refused.
+        if (!originAllowed(cfg, { headers: req.headers, ...target })) {
+          refuse(socket, '403 Forbidden');
+          return null;
+        }
+        return { p, token: parseCookies(req.headers.cookie)[WEB_SESSION_COOKIE] ?? '' };
+      }
+      return { p, token: bearerToken(req.headers.authorization) ?? '' };
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;
       // A failed upgrade answers before any protocol switch (contract §12.8: 429 with Retry-After once over the limit).
       if (e.code === 'RATE_LIMITED') {
         const { retryAfter } = e.details as { retryAfter: number };
         socket.write(`HTTP/1.1 429 Too Many Requests\r\nRetry-After: ${retryAfter}\r\nConnection: close\r\n\r\n`);
+        socket.destroy();
       } else {
-        socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+        refuse(socket, '401 Unauthorized');
       }
-      socket.destroy();
       return null;
     }
   };
 
   app.server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (isOfficePath(url.pathname)) return proxyOfficeUpgrade(cfg, req, socket, head, clientIp(req, cfg.trustProxy));
     if (url.pathname !== '/v1/ws') return socket.destroy();
     // The socket may fail while the token is checked.
     socket.on('error', () => socket.destroy());
     principalOf(req, socket)
-      .then((u) => {
-        if (u) open(req, socket, head, u);
+      .then((r) => {
+        if (r) open(req, socket, head, r.p, r.token);
       })
       .catch(() => socket.destroy());
   });
 
-  const open = (req: IncomingMessage, socket: Duplex, head: Buffer, u: Principal) => {
+  const open = (req: IncomingMessage, socket: Duplex, head: Buffer, u: Principal, token: string) => {
     if (socket.destroyed) return;
     wss.handleUpgrade(req, socket, head, (ws) => {
       const s: Sub = { ws, userId: u.userId, tokenId: u.tokenId, cursor: 0, subscribed: false, readableKey: '' };
@@ -254,7 +318,9 @@ function attachWebSocket(app: FastifyInstance, service: SyncService, { auth, cfg
       if (u.tokenId) {
         // A revocation between the token check and subs.add fired before this socket could match it,
         // so check the token once more now that the socket is registered (a later revocation reaches onRevoked).
-        auth.authenticate(req.headers.authorization).then(
+        // The same credential it authenticated with: the bearer token, or the session cookie's token
+        // (an empty one, which cannot happen for a socket that has a token id, fails and closes).
+        auth.authenticateToken(token).then(
           (r) => {
             if (isAuthFailure(r)) ws.close(WS_TOKEN_REVOKED, 'TOKEN_REVOKED');
           },

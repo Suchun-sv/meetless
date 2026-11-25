@@ -12,6 +12,15 @@ export function noDots(s: string): string {
   return s.replace(DOT_SEP, ' ');
 }
 
+/**
+ * True only for an absolute http(s) URL. Links are handed to the OS (`shell.openExternal`), so any
+ * other scheme (`file:`, `smb:`, `javascript:`, protocol handlers) is refused everywhere a link opens.
+ */
+export function isWebUrl(url: string): boolean {
+  return WEB_URL.test(url);
+}
+const WEB_URL = /^https?:\/\/[^\s/?#]+(?:[/?#]\S*)?$/i;
+
 /** Separator between inline facts in the UI: an em space, never a dot. */
 export const SEP = ' ';
 

@@ -63,6 +63,8 @@ export function serverConfig(over: Partial<ServerConfig> & { dataDir: string }):
     logger: false,
     // Off by default: most tests never touch OnlyOffice. Task 8's own tests override this.
     onlyoffice: { url: null, jwtSecret: null, publicUrl: 'http://meetless-onlyoffice-files:8080', filesSocket: null },
+    // Off by default: most tests never touch the renderer build. web-static.test.ts overrides this.
+    webDir: null,
     ...over,
   };
 }

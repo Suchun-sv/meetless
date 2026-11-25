@@ -1,6 +1,6 @@
 # Meetless Needs Prototype v3 (Claude Design copy)
 
-This is a verbatim copy of the v3 prototype, `Meetless Needs Prototype v3.html`, and every file it loads. The source is Claude Design project `52541e51-171d-433e-9140-207f9ff2033f`. It was copied on 2026-11-24 because Claude Design shuts down by 2026-12-14.
+This is a verbatim copy of the v3 prototype, `Meetless Needs Prototype v3.html`, and every file it loads. The source is a Claude Design project. It was copied on 2026-11-24 because Claude Design shuts down by 2026-12-14.
 
 The prototype is the UI and behaviour spec for the product.
 

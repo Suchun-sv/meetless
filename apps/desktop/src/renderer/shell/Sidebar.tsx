@@ -9,6 +9,7 @@ import { Avatar } from '../ui/primitives';
 import { newInputTarget, sidebarModel } from './model';
 import { RenameInput } from './RenameInput';
 import { UpdateEntry } from './UpdateEntry';
+import { isWeb } from '../ui/DesktopOnly';
 
 /** Language names are shown in their own language, not translated. */
 export const LANG_LABEL: Record<Locale, string> = { 'zh-CN': '中', en: 'EN' };
@@ -22,7 +23,8 @@ export const LANG_LABEL: Record<Locale, string> = { 'zh-CN': '中', en: 'EN' };
  * component tests rely on.
  */
 export function Sidebar({ lastProjectId = null }: { lastProjectId?: Id | null } = {}) {
-  const { live, me, today, route, go, t, locale, setLocale, bridge } = useApp();
+  const app = useApp();
+  const { live, me, today, route, go, t, locale, setLocale, bridge } = app;
   const model = sidebarModel(live, me, route, today);
   const [renaming, setRenaming] = useState<Id | null>(null);
   const onNew = () => {
@@ -109,10 +111,10 @@ export function Sidebar({ lastProjectId = null }: { lastProjectId?: Id | null } 
               {t('app.sample')}
             </div>
           )}
-          <button type="button" className="link" data-testid="sign-out" title={t('user.signOut')} onClick={() => void bridge.signOut()}>
-            {t('user.signOut')}
+          <button type="button" className="link" data-testid="sign-out" title={isWeb(app) ? t('web.signOut') : t('user.signOut')} onClick={() => void bridge.signOut()}>
+            {isWeb(app) ? t('web.signOut') : t('user.signOut')}
           </button>
-          <UpdateEntry />
+          {!isWeb(app) && <UpdateEntry />}
         </div>
         <div className="seg seg-xs" role="group" aria-label={t('user.language')}>
           {SUPPORTED_LOCALES.map((l) => (

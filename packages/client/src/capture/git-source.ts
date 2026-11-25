@@ -48,7 +48,7 @@ export const OVERLEAF_DEFAULT_SUBJECT = /^update on overleaf\.?$/i;
  * trimmed, kept only from 12 characters (skips stray `+`/whitespace noise).
  */
 export async function addedLines(exec: GitExec, dir: string, sha: string, max = 40): Promise<string[]> {
-  const out = await exec(dir, ['show', '--format=', '--unified=0', '--no-color', '--no-ext-diff', sha, '--', '*.tex', '*.bib', '*.md', '*.txt'], {});
+  const out = await exec(dir, ['show', '--format=', '--unified=0', '--no-color', '--no-ext-diff', '--no-textconv', sha, '--', '*.tex', '*.bib', '*.md', '*.txt'], {});
   const lines: string[] = [];
   for (const raw of out.split('\n')) {
     if (!raw.startsWith('+') || raw.startsWith('+++')) continue;

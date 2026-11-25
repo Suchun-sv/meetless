@@ -137,7 +137,7 @@ work) is shared.
 
 ## 7. Running it
 
-All development, tests and screenshots run on the dev server (fish shell: wrap commands in `bash -lc`).
+All development, tests and screenshots run on the shared dev machine.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -174,14 +174,14 @@ users are in `apps/server/src/auth.ts`). Port and schema isolation for parallel 
 | `MEETLESS_ONLYOFFICE_JWT_SECRET` | from `infra/dev/onlyoffice/.env.local` | DocumentServer JWT |
 | `MEETLESS_OFFICE_FILES_SOCKET` | `<dataDir>/office-sock/files.sock` | ticketed file socket for the relay |
 | `MEETLESS_PDF_TEXT` | on | `off` disables per-page PDF text |
+| `MEETLESS_EXTRACT_HEAP_MB` / `MEETLESS_EXTRACT_TIMEOUT_MS` / `MEETLESS_EXTRACT_CONCURRENCY` | `384` / `30000` / `2` | DOCX and PDF parsing runs in worker threads with this heap limit, kill timeout and concurrency |
+| `MEETLESS_PDF_MAX_PAGES` | `2000` | a PDF with more pages is not parsed (`TOO_LARGE`) |
 
-### 7.2 Trial servers on the dev server
+### 7.2 Trial servers
 
-- v3 trial: port 4876, schema `meetless_trial_v3`, worktree `~/work/meetless-v3-trial`, data, pid file and
-  log in `~/work/meetless-v3-trial-data`. Dev auth is off, so sign in with the admin invite in that data
-  dir. Reach it from the Mac through an SSH tunnel (`docs/MCP.md`).
-- The older v2 trial on port 4875 (`~/work/meetless-mac-pkg`, schema `meetless_trial`) is the user's and
-  stays as it is.
+A trial server is an ordinary server with dev auth off, its own port, Postgres schema and data dir.
+Sign in with the admin invite in that data dir. Reach it from a laptop through an SSH tunnel
+(`docs/MCP.md`).
 
 ## 8. Tests
 

@@ -342,7 +342,7 @@ export class NotionClient {
       this.clear();
       return;
     }
-    mkdirSync(dirname(this.file), { recursive: true });
+    mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 });
     writeJsonAtomic(this.file, clean, 0o600);
   }
 

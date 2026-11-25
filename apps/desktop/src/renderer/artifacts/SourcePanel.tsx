@@ -3,6 +3,7 @@ import type { CommitInfo } from '@meetless/client/bridge';
 import { noDots, type Artifact, type Id } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp, type AppApi } from '../app/AppContext';
+import { DesktopOnly, isWeb } from '../ui/DesktopOnly';
 import { Btn } from '../ui/primitives';
 import { capErrorText, CaptureButton, createNotionReader, type NotionRead, type SourcePanelData } from './capture-ui';
 
@@ -75,9 +76,19 @@ export function NotionView({ artifactId, onFailed }: { artifactId: Id; onFailed:
  * button. Presentational: `data` (from `useSourcePanel`) carries everything it needs.
  */
 export function SourceView({ artifact, data }: { artifact: Artifact; data: SourcePanelData }) {
-  const { t, fmtDateTime } = useApp();
+  const app = useApp();
+  const { t, fmtDateTime } = app;
   const [token, setToken] = useState('');
   const { row } = data;
+
+  // On the web, capture needs the local machine (design 2026-11-25 §6): a notice instead of its controls.
+  if (isWeb(app)) {
+    return (
+      <div className="src" data-testid="af-source" data-kind={row.kind} data-ready="false">
+        {row.kind === 'upload' ? <div className="small">{t('af.uploadSource')}</div> : <DesktopOnly />}
+      </div>
+    );
+  }
 
   return (
     <div className="src" data-testid="af-source" data-kind={row.kind} data-ready={String(row.ready)}>

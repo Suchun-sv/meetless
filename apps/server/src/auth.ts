@@ -47,7 +47,12 @@ export class DevAuth {
   /** `Authorization: Bearer <token>` -> user, or null. */
   authenticate(header: string | undefined): DevUser | null {
     const t = bearerToken(header);
-    return t ? (this.byToken.get(t) ?? null) : null;
+    return t ? this.byTokenValue(t) : null;
+  }
+
+  /** A bare dev token -> user, or null. */
+  byTokenValue(token: string): DevUser | null {
+    return this.byToken.get(token) ?? null;
   }
 }
 
@@ -66,11 +71,20 @@ export interface Principal {
   tokenId: Id | null;
   /** The token row's label; null for a dev token. */
   label: string | null;
+  /**
+   * How the token arrived: an `Authorization: Bearer` header, or the web session cookie
+   * (`ml_session`, design 2026-11-25 §3). Set by `authenticateRequest`, the only place that
+   * knows; `Authenticator` itself only ever checks a token and answers a `TokenPrincipal`.
+   */
+  via: 'bearer' | 'cookie';
 }
+
+/** What a token alone says about its caller: a `Principal` before `authenticateRequest` adds how it arrived. */
+export type TokenPrincipal = Omit<Principal, 'via'>;
 
 export type AuthFailure = { error: 'UNAUTHENTICATED' | 'TOKEN_REVOKED' };
 
-export const isAuthFailure = (r: Principal | AuthFailure): r is AuthFailure => 'error' in r;
+export const isAuthFailure = <T extends object>(r: T | AuthFailure): r is AuthFailure => 'error' in r;
 
 /**
  * Checks bearer tokens: personal (`mlp_`) and agent (`mla_`) tokens against the
@@ -87,8 +101,19 @@ export class Authenticator {
     private readonly now: () => Date,
   ) {}
 
-  async authenticate(header: string | undefined): Promise<Principal | AuthFailure> {
+  /** The `Authorization: Bearer <token>` header's token (`authenticateToken`); no header or no bearer token is UNAUTHENTICATED. */
+  async authenticate(header: string | undefined): Promise<TokenPrincipal | AuthFailure> {
     const token = bearerToken(header);
+    if (!token) return { error: 'UNAUTHENTICATED' };
+    return this.authenticateToken(token);
+  }
+
+  /**
+   * One token, however it arrived (a bearer header, or the web session cookie whose caller
+   * already restricts it to personal tokens): personal and agent tokens by hash, dev tokens
+   * against `dev`.
+   */
+  async authenticateToken(token: string): Promise<TokenPrincipal | AuthFailure> {
     if (!token) return { error: 'UNAUTHENTICATED' };
     const kind = tokenKind(token);
     if (kind) {
@@ -98,7 +123,7 @@ export class Authenticator {
       await this.accounts.touchToken(row.id, this.now().toISOString());
       return { userId: row.userId, kind: row.kind, tokenId: row.id, label: row.label };
     }
-    const u = this.dev?.authenticate(header) ?? null;
+    const u = this.dev?.byTokenValue(token) ?? null;
     return u ? { userId: u.id, kind: 'dev', tokenId: null, label: null } : { error: 'UNAUTHENTICATED' };
   }
 

@@ -18,7 +18,7 @@ your own private items. It never sees anyone else's private items.
 
 The Agents page shows these with your token filled in. The server builds them in
 `apps/server/src/accounts/setup.ts` (`agentSetup`). `<serverUrl>` is `MEETLESS_AGENT_URL` when the server
-has one, else the host you reached it by. With the SSH tunnel below it is `http://127.0.0.1:4876`.
+has one, else the host you reached it by. With the SSH tunnel below it is `http://127.0.0.1:<port>`.
 
 ### Claude Code
 
@@ -29,7 +29,7 @@ claude mcp add --transport http meetless <serverUrl>/mcp --header "Authorization
 For the v3 trial through the tunnel:
 
 ```sh
-claude mcp add --transport http meetless http://127.0.0.1:4876/mcp --header "Authorization: Bearer <TOKEN>" --header "X-Meetless-Client: claude-code"
+claude mcp add --transport http meetless <serverUrl>/mcp --header "Authorization: Bearer <TOKEN>" --header "X-Meetless-Client: claude-code"
 ```
 
 `claude mcp list` should then show `meetless` as connected.
@@ -75,22 +75,22 @@ same commands plus the skill as one Markdown page.
 
 `remember` and `recall` are reserved for project memory and not built.
 
-## 4. Reaching the trial server from the Mac
+## 4. Reaching a dev server from a laptop
 
-The v3 trial server listens on 127.0.0.1:4876 on the dev server. Forward it:
+A dev or trial server listens on 127.0.0.1 on the dev machine. Forward its port:
 
 ```sh
-ssh -N -L 4876:127.0.0.1:4876 <user>@<dev-server>
+ssh -N -L <port>:127.0.0.1:<port> <dev-host>
 ```
 
-In the app, sign in to `http://127.0.0.1:4876`, then run the commands above with that URL. The tunnel is
+In the app, sign in to `http://127.0.0.1:<port>`, then run the commands above with that URL. The tunnel is
 for development only. A public deployment would put HTTPS in front of the server, and DocumentServer
 would stay on the private network (contract §12.13).
 
 ## 5. Checking it by hand
 
 ```sh
-curl -s -X POST http://127.0.0.1:4876/mcp \
+curl -s -X POST <serverUrl>/mcp \
   -H "Authorization: Bearer <TOKEN>" -H "X-Meetless-Client: claude-code" \
   -H "content-type: application/json" -H "accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'

@@ -16,7 +16,7 @@ export class LocalCache {
   private db: DatabaseSync;
 
   constructor(readonly file: string) {
-    mkdirSync(dirname(file), { recursive: true });
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(file);
     this.db.exec(`
       pragma journal_mode = wal;

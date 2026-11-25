@@ -8,9 +8,10 @@ import type { Handler } from './frame';
  * answers `not_configured` directly, rather than standing up a throwaway `OfficeViewer` whose
  * ticket secret could never match any real files socket anyway.
  */
-const officeConfig: Handler<'office.config'> = async ({ p, req, deps }) => {
+const officeConfig: Handler<'office.config'> = async ({ p, req, http, deps }) => {
   if (!deps.officeViewer) return { available: false, reason: 'not_configured' };
-  return deps.officeViewer.config(p, req);
+  // A web session loads DocumentServer through this server's /office proxy (design 2026-11-25 §5).
+  return deps.officeViewer.config(p, req, p.via === 'cookie' ? `${http.protocol}://${http.host}` : null);
 };
 
 /** Spread into `HANDLERS` in `api/index.ts`. */

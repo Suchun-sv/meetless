@@ -180,11 +180,11 @@ describe('defineRoute', () => {
     expect(refused.json()).toEqual({ error: { code: 'NOT_AUTHORISED' } });
     for (const t of [personal.token, TOKENS.lin, agent.token]) expect((await get('/v1/projects', t)).statusCode).toBe(200);
     expect(seen).toEqual([
-      { userId: IDS.lin, kind: 'personal', tokenId: personal.id, label: 'app' },
-      { userId: IDS.lin, kind: 'dev', tokenId: null, label: null },
-      { userId: IDS.lin, kind: 'personal', tokenId: personal.id, label: 'app' },
-      { userId: IDS.lin, kind: 'dev', tokenId: null, label: null },
-      { userId: IDS.lin, kind: 'agent', tokenId: agent.id, label: 'codex' },
+      { userId: IDS.lin, kind: 'personal', tokenId: personal.id, label: 'app', via: 'bearer' },
+      { userId: IDS.lin, kind: 'dev', tokenId: null, label: null, via: 'bearer' },
+      { userId: IDS.lin, kind: 'personal', tokenId: personal.id, label: 'app', via: 'bearer' },
+      { userId: IDS.lin, kind: 'dev', tokenId: null, label: null, via: 'bearer' },
+      { userId: IDS.lin, kind: 'agent', tokenId: agent.id, label: 'codex', via: 'bearer' },
     ]);
     const redeem = await b.app.inject({ method: 'POST', url: '/v1/invites/redeem', payload: { code: 'x', displayName: 'Kai', locale: 'en' } });
     expect(redeem.statusCode).toBe(200);
@@ -246,6 +246,7 @@ describe('defineRoute', () => {
       TOKEN_REVOKED: 401,
       NOT_AUTHORISED: 403,
       NOT_A_MEMBER: 403,
+      CSRF_FAILED: 403,
       NOT_FOUND: 404,
       INVITE_INVALID: 404,
       INVITE_USED: 409,

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -49,5 +49,30 @@ describe('GitRepos', () => {
     await expect(repos.resolve(id, '--output=/tmp/x')).rejects.toBeInstanceOf(GitError);
     await expect(repos.patch(id, null, log[0]!.commit, '../../etc/passwd')).rejects.toMatchObject({ code: 'BAD_PATH' });
     await expect(repos.log('repo-unknown')).rejects.toMatchObject({ code: 'REPO_NOT_REGISTERED' });
+  });
+});
+
+describe('a repo cannot make a diff run its own commands', () => {
+  it('diff.external and textconv drivers in the repo config are never run', async () => {
+    const marker = join(root, 'ran');
+    const tool = join(root, 'tool.sh');
+    writeFileSync(tool, `#!/bin/sh\ntouch '${marker}'\ncat "$1" 2>/dev/null\n`);
+    chmodSync(tool, 0o755);
+    g('config', 'diff.external', tool);
+    g('config', 'diff.evil.textconv', tool);
+    writeFileSync(join(repo, '.gitattributes'), '*.ts diff=evil\n');
+    const repos = new GitRepos(root);
+    const { id } = await repos.register(repo);
+    const log = await repos.log(id, 'main', 10);
+    await repos.diffFiles(id, log[1]!.commit, log[0]!.commit);
+    await repos.diffFiles(id, null, log[0]!.commit);
+    await repos.patch(id, log[1]!.commit, log[0]!.commit, 'src/export.ts');
+    await repos.patch(id, null, log[0]!.commit, 'src/export.ts');
+    await repos.file(id, log[0]!.commit, 'src/export.ts');
+    await repos.snapshot(id, log[0]!.commit, undefined);
+    expect(existsSync(marker)).toBe(false);
+    g('config', '--unset', 'diff.external');
+    g('config', '--unset', 'diff.evil.textconv');
+    rmSync(join(repo, '.gitattributes'));
   });
 });

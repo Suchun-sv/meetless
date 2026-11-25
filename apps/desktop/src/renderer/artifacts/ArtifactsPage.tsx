@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { noDots, shareableView, type Id } from '@meetless/core';
+import { isWebUrl, noDots, shareableView, type Id } from '@meetless/core';
 import type { PageProps } from '../app/pages';
 import { useApp } from '../app/AppContext';
 import { Btn } from '../ui/primitives';
@@ -46,7 +46,7 @@ export function ArtifactsPage({ composer }: PageProps) {
     void copyAgentPrompt(write, agentPrompt(t, projectId, pub), notify, t);
   };
   const onOpen = () => {
-    if (a?.url) window.open(a.url, '_blank', 'noopener');
+    if (a?.url && isWebUrl(a.url)) window.open(a.url, '_blank', 'noopener');
   };
 
   const state = a ? shareState(live, me, a) : null;

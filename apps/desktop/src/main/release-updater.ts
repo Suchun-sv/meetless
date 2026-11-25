@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createWriteStream, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { createWriteStream, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { Result, UpdateState } from '@meetless/client/bridge';
+import { BUNDLE_ID, bundleInfo, checkUnpacked, checkZip, SEMVER, verifySignature, VerifyError, zipEntries } from './update-verify';
 
 /**
  * Updates for installed builds, from GitHub Releases (see .github/workflows/release.yml and
@@ -15,7 +16,9 @@ import type { Result, UpdateState } from '@meetless/client/bridge';
  *   latest-linux.yml from the release.
  * - macOS would go through Squirrel there, which only accepts apps signed with an Apple developer
  *   identity. So the app swaps itself: download the zip for this architecture, check its SHA-512
- *   against latest-mac.yml, unpack it next to the running app and put it in its place, relaunch.
+ *   against latest-mac.yml, check the zip's entries, unpack it next to the running app, check that
+ *   it is a Meetless build of the manifest's version signed by the Meetless certificate
+ *   (update-verify.ts), put it in its place, relaunch.
  *   A file the app downloads itself carries no quarantine flag, so Gatekeeper does not stop it.
  *   Quarantine is never stripped from anything: what the user downloaded keeps its flag.
  * - Any other install type (a .deb, an unpacked dir, a dev run) offers the releases page.
@@ -27,6 +30,11 @@ import type { Result, UpdateState } from '@meetless/client/bridge';
 const REPO = 'Suchun-sv/meetless';
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 const API_URL = `https://api.github.com/repos/${REPO}`;
+/** The only hosts a release download may be redirected to (GitHub's release-asset CDNs), always over https. */
+export const REDIRECT_HOSTS: ReadonlySet<string> = new Set(['github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com']);
+/** Caps: a manifest is a few hundred bytes, a macOS zip about 120 MB. */
+export const MANIFEST_MAX_BYTES = 256 * 1024;
+export const ZIP_MAX_BYTES = 1024 ** 3;
 /** How often the running app looks for a new release. */
 export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -41,14 +49,17 @@ export function installKind(opts: { packaged: boolean; platform: NodeJS.Platform
   return 'manual';
 }
 
-/** Numeric x.y.z compare (a pre-release suffix sorts before its release). */
+/** Strict x.y.z compare (a pre-release suffix sorts before its release); anything that is not semver is never newer. */
 export function newer(a: string, b: string): boolean {
   const parse = (v: string) => {
-    const [core = '', pre] = v.replace(/^v/, '').split('-');
-    return { nums: core.split('.').map((n) => Number(n) || 0), pre };
+    const s = v.replace(/^v/, '');
+    if (!SEMVER.test(s)) return null;
+    const [core = '', ...pre] = s.split('-');
+    return { nums: core.split('.').map(Number), pre: pre.join('-') };
   };
   const x = parse(a);
   const y = parse(b);
+  if (!x || !y) return false;
   for (let i = 0; i < 3; i++) if ((x.nums[i] ?? 0) !== (y.nums[i] ?? 0)) return (x.nums[i] ?? 0) > (y.nums[i] ?? 0);
   return !x.pre && !!y.pre;
 }
@@ -110,6 +121,45 @@ export function swapBundle(bundle: string, fresh: string): void {
   rmSync(old, { recursive: true, force: true });
 }
 
+/** The zip the macOS updater takes for `arch`: exactly the name electron-builder gives it. */
+export function macZipName(version: string, arch: string): string | null {
+  return SEMVER.test(version) && (arch === 'arm64' || arch === 'x64') ? `Meetless-${version}-mac-${arch}.zip` : null;
+}
+
+/**
+ * GET with redirects followed by hand: each hop must be https on `REDIRECT_HOSTS`, or stay on the
+ * configured base's own origin (a test or dev server). Node's fetch would follow any host or scheme.
+ */
+async function fetchPinned(url: string, base: string, signal: AbortSignal): Promise<Response> {
+  const home = new URL(base).origin;
+  let u = new URL(url);
+  for (let hop = 0; hop < 6; hop++) {
+    const res = await fetch(u, { redirect: 'manual', signal });
+    const loc = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (!loc) return res;
+    await res.body?.cancel().catch(() => undefined);
+    const next = new URL(loc, u);
+    if (!(next.origin === home || (next.protocol === 'https:' && REDIRECT_HOSTS.has(next.hostname)))) {
+      throw new UpdateError('UPDATE_DOWNLOAD', `redirect to ${next.protocol}//${next.host} refused`);
+    }
+    u = next;
+  }
+  throw new UpdateError('UPDATE_DOWNLOAD', 'too many redirects');
+}
+
+/** The body as text, refusing more than `max` bytes. */
+async function textCapped(res: Response, max: number): Promise<string> {
+  if (Number(res.headers.get('content-length') ?? 0) > max) throw new UpdateError('UPDATE_DOWNLOAD', 'response too large');
+  const chunks: Buffer[] = [];
+  let got = 0;
+  for await (const c of Readable.fromWeb(res.body as WebReadableStream)) {
+    got += (c as Buffer).length;
+    if (got > max) throw new UpdateError('UPDATE_DOWNLOAD', 'response too large');
+    chunks.push(c as Buffer);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 const run = (cmd: string, args: string[]) =>
   new Promise<void>((done, fail) => execFile(cmd, args, (e) => (e ? fail(e) : done())));
 
@@ -144,6 +194,8 @@ export interface ReleaseUpdaterOptions {
   /** macOS: the running .app bundle. */
   bundlePath?: string;
   unzip?: (zip: string, dir: string) => Promise<void>;
+  /** macOS: codesign the unpacked bundle against the pinned requirement; tests pass a fake. */
+  verifySignature?: (app: string) => Promise<void>;
   electronUpdater?: (progress: (percent: number) => void) => Promise<void>;
   /** macOS: restart into the swapped bundle. */
   relaunch?: () => void;
@@ -235,11 +287,14 @@ export class ReleaseUpdater {
    * behind a shared address).
    */
   private async latest(): Promise<Pending | null> {
-    const res = await fetch(`${this.base}/latest/download/${manifestName(this.opts.platform)}`, { signal: AbortSignal.timeout(15_000) });
+    const res = await fetchPinned(`${this.base}/latest/download/${manifestName(this.opts.platform)}`, this.base, AbortSignal.timeout(15_000));
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`manifest: HTTP ${res.status}`);
-    const { version, files } = parseManifest(await res.text());
-    if (!version || !newer(version, this.opts.currentVersion)) return null;
+    if (!res.ok || !res.body) throw new Error(`manifest: HTTP ${res.status}`);
+    const { version, files } = parseManifest(await textCapped(res, MANIFEST_MAX_BYTES));
+    if (!version) return null;
+    // The version becomes a tag in a URL path: strict semver only, so it can never traverse.
+    if (!SEMVER.test(version)) throw new UpdateError('UPDATE_UNTRUSTED', `manifest version is not semver: ${JSON.stringify(version.slice(0, 40))}`);
+    if (!newer(version, this.opts.currentVersion)) return null;
     return { version, tag: `v${version}`, files };
   }
 
@@ -268,7 +323,7 @@ export class ReleaseUpdater {
       // Always the newest: what the dialog showed may have been replaced since.
       this.set({ phase: 'downloading', percent: null, error: null });
       const p = await this.latest().catch((e: unknown) => {
-        throw new UpdateError('UPDATE_DOWNLOAD', String((e as Error).message ?? e));
+        throw e instanceof UpdateError ? e : new UpdateError('UPDATE_DOWNLOAD', String((e as Error).message ?? e));
       });
       if (!p) throw new UpdateError('UPDATE_NONE');
       if (this.opts.kind === 'mac') await this.installMac(p);
@@ -279,7 +334,7 @@ export class ReleaseUpdater {
       return { ok: true };
     } catch (e) {
       const errno = (e as NodeJS.ErrnoException).code;
-      const code = e instanceof UpdateError ? e.code : errno === 'EACCES' || errno === 'EPERM' || errno === 'EROFS' ? 'UPDATE_PERMISSION' : 'UPDATE_FAILED';
+      const code = e instanceof UpdateError ? e.code : e instanceof VerifyError ? 'UPDATE_UNTRUSTED' : errno === 'EACCES' || errno === 'EPERM' || errno === 'EROFS' ? 'UPDATE_PERMISSION' : 'UPDATE_FAILED';
       this.opts.log?.(`update install failed (${code}): ${String((e as Error).message ?? e)}`);
       this.set({ phase: 'failed', percent: null, error: code });
       return { ok: false, code };
@@ -294,38 +349,51 @@ export class ReleaseUpdater {
   private async installMac(p: Pending): Promise<void> {
     const bundle = this.opts.bundlePath;
     if (!bundle || !bundle.endsWith('.app')) throw new UpdateError('UPDATE_FAILED', `not an app bundle: ${bundle}`);
-    const file = p.files.find((f) => f.url.endsWith(`-${this.opts.arch}.zip`));
-    if (!file) throw new UpdateError('UPDATE_FAILED', `no zip for ${this.opts.arch} in ${p.tag}`);
+    const want = macZipName(p.version, this.opts.arch);
+    const file = want ? p.files.find((f) => f.url === want) : undefined;
+    if (!file) throw new UpdateError('UPDATE_FAILED', `no ${want ?? `zip for ${this.opts.arch}`} in ${p.tag}`);
     if (!file.sha512) throw new UpdateError('UPDATE_CHECKSUM', 'the manifest has no sha512');
+    if (!(file.size > 0 && file.size <= ZIP_MAX_BYTES)) throw new UpdateError('UPDATE_DOWNLOAD', `bad size ${file.size} for ${file.url}`);
 
     // Next to the running bundle, so the swap is two renames on one volume.
     const work = mkdtempSync(join(dirname(bundle), '.Meetless-update-'));
     try {
       const zip = join(work, 'update.zip');
-      const res = await fetch(`${this.base}/download/${p.tag}/${encodeURIComponent(file.url)}`, { signal: AbortSignal.timeout(30 * 60_000) });
+      const res = await fetchPinned(`${this.base}/download/${p.tag}/${encodeURIComponent(file.url)}`, this.base, AbortSignal.timeout(30 * 60_000));
       if (!res.ok || !res.body) throw new UpdateError('UPDATE_DOWNLOAD', `download: HTTP ${res.status}`);
+      const length = res.headers.get('content-length');
+      if (length !== null && Number(length) !== file.size) throw new UpdateError('UPDATE_DOWNLOAD', `size ${length} is not the manifest's ${file.size}`);
       const hash = createHash('sha512');
       let got = 0;
       const count = new Transform({
         transform: (chunk: Buffer, _enc, done) => {
-          hash.update(chunk);
           got += chunk.length;
-          if (file.size) this.progress((got / file.size) * 100);
+          // Never write more than the manifest says: a bad redirect target cannot fill the disk.
+          if (got > file.size) return done(new UpdateError('UPDATE_DOWNLOAD', `more than the manifest's ${file.size} bytes`));
+          hash.update(chunk);
+          this.progress((got / file.size) * 100);
           done(null, chunk);
         },
       });
       await pipeline(Readable.fromWeb(res.body as WebReadableStream), count, createWriteStream(zip)).catch((e: unknown) => {
-        throw new UpdateError('UPDATE_DOWNLOAD', String((e as Error).message ?? e));
+        throw e instanceof UpdateError ? e : new UpdateError('UPDATE_DOWNLOAD', String((e as Error).message ?? e));
       });
+      if (got !== file.size) throw new UpdateError('UPDATE_DOWNLOAD', `got ${got} of ${file.size} bytes`);
       if (hash.digest('base64') !== file.sha512) throw new UpdateError('UPDATE_CHECKSUM', `sha512 mismatch for ${file.url}`);
       this.progress(100);
 
       this.set({ phase: 'installing', percent: null });
+      // Nothing is unpacked until the entries are known to stay inside Meetless.app.
+      checkZip(zipEntries(zip));
       const unpacked = join(work, 'app');
       await (this.opts.unzip ?? defaultUnzip(this.opts.platform))(zip, unpacked);
-      const name = readdirSync(unpacked).find((n) => n.endsWith('.app'));
-      if (!name) throw new UpdateError('UPDATE_FAILED', 'no .app in the zip');
-      swapBundle(bundle, join(unpacked, name));
+      const app = checkUnpacked(unpacked);
+      const info = await bundleInfo(app, this.opts.platform);
+      if (info.id !== BUNDLE_ID) throw new VerifyError(`bundle id ${info.id}`);
+      if (info.version !== p.version) throw new VerifyError(`bundle version ${info.version} is not the manifest's ${p.version}`);
+      if (!newer(info.version, this.opts.currentVersion)) throw new VerifyError(`bundle version ${info.version} is not newer than ${this.opts.currentVersion}`);
+      await (this.opts.verifySignature ?? ((a: string) => verifySignature(a, this.opts.platform)))(app);
+      swapBundle(bundle, app);
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

@@ -5,5 +5,12 @@ import './styles/base.css';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { resolveBridge } from './app/bridge';
+import { ErrorBoundary } from './app/ErrorBoundary';
 
-createRoot(document.getElementById('root')!).render(<App bridge={resolveBridge()} />);
+// public/boot.js (a classic script that runs first) shows any error raised before this point.
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary>
+    <App bridge={resolveBridge()} />
+  </ErrorBoundary>,
+);
+window.__meetlessMounted = true;

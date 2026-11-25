@@ -13,6 +13,8 @@ export const API_ERROR_CODES = [
   'EXTRACT_FAILED',
   'TOO_LARGE',
   'RATE_LIMITED',
+  /** A cookie-authenticated write without the matching `x-meetless-csrf` or from a foreign Origin (web sessions, 403). */
+  'CSRF_FAILED',
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

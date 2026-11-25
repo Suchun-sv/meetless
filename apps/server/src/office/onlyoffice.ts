@@ -2,6 +2,7 @@ import { DomainError, noDots } from '@meetless/core';
 import type { ApiRequest, ApiResponse } from '@meetless/api';
 import type { ApiDeps } from '../api/frame';
 import type { Principal } from '../auth';
+import { OFFICE_PROXY_PREFIX } from '../web/office-proxy';
 import { signHs256 } from './jwt';
 import type { OfficeTickets, OfficeTicketExt } from './tickets';
 
@@ -59,7 +60,12 @@ export class OfficeViewer {
     return ok;
   }
 
-  async config(p: Principal, req: ApiRequest<'office.config'>): Promise<ApiResponse<'office.config'>> {
+  /**
+   * `webOrigin`: the caller's page origin (`<protocol>://<host>`) when it is a web session; the
+   * browser then loads DocumentServer through the server's `/office` proxy (design 2026-11-25 §5).
+   * Null (the desktop, an agent) keeps `MEETLESS_ONLYOFFICE_URL` as before.
+   */
+  async config(p: Principal, req: ApiRequest<'office.config'>, webOrigin: string | null = null): Promise<ApiResponse<'office.config'>> {
     // Privacy first (contract §12.9 pattern): an artifact or version the caller cannot see
     // in their own view answers NOT_FOUND, exactly like `artifacts.read` — before any
     // question of OnlyOffice configuration or kind is even asked, so none of that ever
@@ -125,6 +131,7 @@ export class OfficeViewer {
       },
     };
     const token = signHs256(configWithoutToken, oo.jwtSecret);
-    return { available: true, documentServerUrl: oo.url, config: { ...configWithoutToken, token } };
+    const documentServerUrl = webOrigin ? `${webOrigin}${OFFICE_PROXY_PREFIX}` : oo.url;
+    return { available: true, documentServerUrl, config: { ...configWithoutToken, token } };
   }
 }

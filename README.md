@@ -21,7 +21,7 @@ docs/MACOS.md          the unsigned macOS arm64 build
 docs/screenshots/v3/   every page in zh-CN and en at 1440x900
 ```
 
-## Run (on the dev server)
+## Run (on the dev machine)
 
 ```sh
 pnpm install --frozen-lockfile
@@ -45,7 +45,7 @@ with your name to create the first account, then invite teammates from a project
 
 `docs/MACOS.md` covers building the unsigned arm64 dmg and zip on the Mac, the headless smoke check, and
 what Gatekeeper does with an unsigned build. The app connects to a server you can reach. During
-development that is the dev server through an SSH tunnel.
+development that is the dev machine, through an SSH tunnel.
 
 ## License
 

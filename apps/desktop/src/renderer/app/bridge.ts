@@ -1,4 +1,6 @@
 import { BRIDGE_METHODS, type BridgeEvent, type MeetlessBridge } from '@meetless/client/bridge';
+import { createWebBridge } from '@meetless/client/web';
+import { WEB_HOST_META } from '@meetless/api';
 import { decodeWire, encodeWire } from '../../shared/wire';
 
 declare global {
@@ -10,14 +12,26 @@ declare global {
 
 /**
  * Electron: the preload bridge. Otherwise (dev / headless tests only):
- * `?bridge=<url>&bridgeToken=<token>` connects to a dev bridge host process.
+ * `?bridge=<url>&bridgeToken=<token>` connects to a dev bridge host process. Otherwise, on the
+ * Meetless server's own page (`<meta name="meetless-host" content="web">`, design 2026-11-25 §2):
+ * the web bridge over same-origin HTTP and WebSocket. Else null.
  */
-export function resolveBridge(): MeetlessBridge | null {
-  if (window.meetless) return window.meetless;
-  const q = new URLSearchParams(location.search);
+export function resolveBridge(
+  win: Pick<Window, 'meetless'> & { location: Pick<Location, 'search' | 'origin'> } = window,
+  doc: Pick<Document, 'querySelector'> = document,
+): MeetlessBridge | null {
+  if (win.meetless) return win.meetless;
+  const q = new URLSearchParams(win.location.search);
   const url = q.get('bridge');
   const token = q.get('bridgeToken');
-  return url && token ? createHttpBridge(url, token) : null;
+  if (url && token) return createHttpBridge(url, token);
+  const marker = doc.querySelector(`meta[name="${WEB_HOST_META}"]`);
+  if (marker?.getAttribute('content') === 'web') return createWebBridge({ origin: win.location.origin, systemLocales: systemLocales() });
+  return null;
+}
+
+function systemLocales(): string[] {
+  return typeof navigator === 'undefined' ? [] : [...(navigator.languages ?? [navigator.language])].filter(Boolean);
 }
 
 /** DEV/TEST transport for the bridge contract (see src/bridge-host). Not used in the Electron app. */

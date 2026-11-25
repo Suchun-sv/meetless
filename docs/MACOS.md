@@ -8,12 +8,9 @@ notes, version info) and §14 A01/A18. The stage results are in §6.
 
 | | |
 |---|---|
-| Machine | `<mac>` (Tailscale name; local host name `<mac>`), the user's own MacBook |
-| Hardware | Apple M3 Pro, arm64, 36 GB RAM |
-| OS | macOS 27.0.1 (build 26A434) |
-| Toolchain used | Xcode Command Line Tools, git, Node v24.13.0 (`/usr/local/bin/node`), pnpm 12.23.0 via `npx -y pnpm@12.23.0` (the Mac's global pnpm is 11.1.2 and was not changed) |
+| Machine | an Apple silicon (arm64) Mac |
+| Toolchain used | Xcode Command Line Tools, git, Node 24, pnpm 12.23.0 via `npx -y pnpm@12.23.0` |
 | Signing | no code-signing identity installed (`security find-identity -v -p codesigning` reports 0 valid identities) |
-| Disk | about 38 GiB free of 926 GiB (96% used), so keep build output small |
 
 ## 2. Packaging choice: electron-builder
 
@@ -70,11 +67,8 @@ npx -y pnpm@12.23.0 install --frozen-lockfile
 (cd apps/desktop && node scripts/smoke-packaged.mjs)
 ```
 
-Network note for this Mac: direct downloads from `github.com` failed (`fetch failed`, curl reported an
-HTTP/2 framing error). The Electron and electron-builder downloads worked through the Mac's existing local
-proxy, set for these commands only:
-`HTTPS_PROXY=http://127.0.0.1:7897 HTTP_PROXY=http://127.0.0.1:7897 NO_PROXY=127.0.0.1,localhost NODE_USE_ENV_PROXY=1`.
-No system or proxy settings were changed. electron-builder reuses `node_modules/electron/dist`
+Network note: if direct downloads from `github.com` fail, set `HTTPS_PROXY`, `HTTP_PROXY`,
+`NO_PROXY=127.0.0.1,localhost` and `NODE_USE_ENV_PROXY=1` for these commands only. electron-builder reuses `node_modules/electron/dist`
 (`electronDist`), so Electron is downloaded only once. It also downloads `dmgbuild` and `7zip` into
 `ELECTRON_BUILDER_CACHE`.
 
@@ -286,7 +280,7 @@ worktrees `~/github/meetless` and `~/github/meetless-next` were not touched.
   and needs the user's approval. Evidence would go to `docs/screenshots/v3/macos/`.
 - Disk: about 1.4 GiB in the worktree (`node_modules` 540 MiB, `release` 488 MiB, `.cache` 339 MiB);
   29.5 GiB free after. To free it: `rm -rf ~/github/meetless-v3/apps/desktop/release ~/github/meetless-v3/.cache`.
-- To try it against the v3 trial server, forward `4876` (and `55435` for OnlyOffice) as in `docs/MCP.md` §4.
+- To try it against a dev server, forward its port (and `55435` for OnlyOffice) as in `docs/MCP.md` §4.
 
 Rebuilt on `48afbe6` (avatar and CJK name fixes), same worktree and commands; headless smoke 8/8 PASS, no window:
 

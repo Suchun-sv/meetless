@@ -35,7 +35,7 @@ const FROZEN_EXPORTS = [
   'currentRound', 'cutoffSeqAtTime', 'dashboardKey', 'daysBetween', 'daysLeft',
   'deliveryCard', 'detectExtracts', 'emptyState', 'eventScope', 'groupByNeed',
   'handoffForNeed', 'handoffStaleness', 'homeItems', 'hypothesesCard', 'inputStatus',
-  'isDomainError', 'isOpen', 'isProgress', 'isSystemActor', 'lastFetchedVersion',
+  'isDomainError', 'isOpen', 'isProgress', 'isSystemActor', 'isWebUrl', 'lastFetchedVersion',
   'looksLikeInput', 'matchNeed', 'materialHits', 'membersCard', 'membersOf', 'myProjectIds',
   'needByCode', 'needContext', 'needLink', 'needVersion', 'nextRound',
   'noDots', 'openConflicts', 'openProposals', 'orderBySeq', 'overlap',
