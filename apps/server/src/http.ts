@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -27,7 +30,9 @@ export type ServerMessage =
   /** Sent once after a subscribe has been served up to the current head. */
   | { type: 'synced'; cursor: Seq; head: Seq; epoch: Id | null }
   | { type: 'reset'; reason: 'cursor_mismatch' | 'access_changed' }
-  | { type: 'error'; code: string };
+  | { type: 'error'; code: string }
+  /** The renderer build the server serves (a hash of the web dir's index.html): the web offers a refresh when it changes. */
+  | { type: 'build'; hash: string };
 
 const READ_DENIED = new Set(['NOT_A_MEMBER', 'NOT_AUTHORISED']);
 
@@ -224,6 +229,23 @@ function attachWebSocket(app: FastifyInstance, service: SyncService, { auth, cfg
   const send = (ws: WebSocket, m: ServerMessage) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
   };
+  // The renderer build served at /, checked every minute; every socket hears when it changes.
+  const buildHash = (): string | null => {
+    if (!cfg.webDir) return null;
+    try {
+      return createHash('sha256').update(readFileSync(join(cfg.webDir, 'index.html'))).digest('hex').slice(0, 16);
+    } catch {
+      return null;
+    }
+  };
+  let build = buildHash();
+  const buildTimer = setInterval(() => {
+    const next = buildHash();
+    if (!next || next === build) return;
+    build = next;
+    for (const s of subs) send(s.ws, { type: 'build', hash: next });
+  }, 60_000);
+  buildTimer.unref();
 
   const pump = (s: Sub) => {
     while (s.subscribed) {
@@ -355,10 +377,12 @@ function attachWebSocket(app: FastifyInstance, service: SyncService, { auth, cfg
         send(ws, { type: 'synced', cursor: s.cursor, head: service.head, epoch: service.epoch });
       });
       send(ws, { type: 'hello', head: service.head, epoch: service.epoch, userId: u.userId });
+      if (build) send(ws, { type: 'build', hash: build });
     });
   };
   // preClose: upgraded sockets would otherwise keep server.close() waiting.
   app.addHook('preClose', async () => {
+    clearInterval(buildTimer);
     offRevoked();
     for (const s of subs) s.ws.terminate();
     wss.close();

@@ -105,8 +105,17 @@ export function ExtractPanel({
         })
       )}
       <div className="in-x-footer small faint row gap6">
-        <RulesMark />
-        <span>{t('in.rules')}</span>
+        {input?.detector.startsWith('deepseek') ? (
+          <>
+            <span className="ai tone-ai">{t('ai.deepseek')}</span>
+            <span>{t('in.deepseek')}</span>
+          </>
+        ) : (
+          <>
+            <RulesMark />
+            <span>{t('in.rules')}</span>
+          </>
+        )}
       </div>
     </div>
   );

@@ -2,10 +2,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { aiConfigFromEnv, answerLocale, cleanAnswer, ProjectAi, type AiConfig } from '../src/agents/deepseek';
-import { http, IDS, TODAY, TOKENS, withServer, type TestServer } from './helpers';
+import { cmd, http, IDS, TODAY, TOKENS, withServer, type TestServer } from './helpers';
 import { PRIVATE_WORD, seedTeam, type Team } from './seed';
 
 const KEY = 'sk-test-0123456789abcdef-never-shown';
+/** The user's report, verbatim. */
+const SENTENCE = '需要：1. 做一个research talk的slides； 2. 准备一下leetcode的题目';
 
 type Mode = 'ok' | 'fail' | 'hang';
 
@@ -14,6 +16,9 @@ class FakeModel {
   mode: Mode = 'ok';
   /** What the fake answers in `ok` mode; `{first}` is replaced with the first cite id in the request. */
   content = 'Customers asked for a CSV export {first}.';
+  /** What the classifier answers, and the extractor's JSON. */
+  classifyAs = 'question';
+  extractJson = JSON.stringify({ items: [{ type: 'new', text: '1. 做一个 research talk 的 slides' }, { type: 'new', text: '准备一下 leetcode 的题目 · 每天两道' }, { type: 'bogus', text: 'x' }, { type: 'rev', text: '改 N9', needCode: 'N9' }] });
   bodies: string[] = [];
   auth: (string | undefined)[] = [];
   private server!: Server;
@@ -31,7 +36,14 @@ class FakeModel {
           res.writeHead(500, { 'content-type': 'application/json' });
           return void res.end('{"error":{"message":"boom"}}');
         }
-        const user = (JSON.parse(body) as { messages: { content: string }[] }).messages[1]!.content;
+        const msgs = (JSON.parse(body) as { messages: { content: string }[] }).messages;
+        const reply = (content: string) => {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content } }], usage: { prompt_tokens: 90, completion_tokens: 10, total_tokens: 100 } }));
+        };
+        if (msgs[0]!.content.includes('exactly one word')) return reply(this.classifyAs);
+        if (msgs[0]!.content.includes('extract work items')) return reply(this.extractJson);
+        const user = msgs[1]!.content;
         const first = /\[(S\d+)\]/.exec(user)?.[1] ?? 'S1';
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(
@@ -76,6 +88,7 @@ describe('project agent with DeepSeek (agent.ask)', () => {
     team = await seedTeam(s.base);
   });
   afterEach(() => {
+    fake.classifyAs = 'question';
     fake.mode = 'ok';
     fake.content = 'Customers asked for a CSV export {first}.';
   });
@@ -176,9 +189,101 @@ describe('project agent with DeepSeek (agent.ask)', () => {
     expect(JSON.stringify(ai)).not.toContain(KEY);
   });
 
+  it('content to add is imported into To confirm with DeepSeek extraction, validated', async () => {
+    fake.bodies = [];
+    const r = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: SENTENCE, messageId: 'm-add1' });
+    expect(r.status).toBe(200);
+    expect(r.json.reply).toMatchObject({ source: 'deepseek', simulated: false, provider: 'deepseek/deepseek-chat', answer: { intent: 'added', inputId: 'in-m-add1', private: false } });
+    // The rules saw an add: no classification call, one extraction call.
+    expect(fake.bodies).toHaveLength(1);
+    expect(fake.bodies[0]).toContain('extract work items');
+    const items = r.json.reply.answer.items as { type: string; text: string }[];
+    expect(items.map((x) => [x.type, x.text])).toEqual([
+      ['new', '做一个 research talk 的 slides'],
+      ['new', '准备一下 leetcode 的题目 每天两道'],
+      ['new', '改 N9'],
+    ]);
+    const input = s.svc.view(IDS.lin).inputs['in-m-add1']!;
+    expect(input).toMatchObject({ kind: 'txt', privateTo: null, detector: 'deepseek/deepseek-chat' });
+    expect(input.extracts.every((x) => x.state === null)).toBe(true);
+    expect(s.svc.view(IDS.zhou).inputs['in-m-add1']).toBeDefined();
+  });
+
+  it('accepting them all creates the needs at once', async () => {
+    const input = s.svc.view(IDS.lin).inputs['in-m-add1']!;
+    for (const [i, x] of input.extracts.entries()) {
+      const c = await http(s.base, TOKENS.lin, 'POST', '/v1/commands', cmd('extract.accepted', { inputId: input.id, extractId: x.id, needId: `need-add1-${i}` }));
+      expect(c.status).toBe(201);
+    }
+    const v = s.svc.view(IDS.zhou);
+    expect(v.needs['need-add1-0']).toMatchObject({ title: '做一个 research talk 的 slides', privateTo: null, projectId: 'p1' });
+    expect(v.needs['need-add1-1']).toBeDefined();
+  });
+
+  it('with 「仅自己」 the input, its extracts and the needs they make stay private', async () => {
+    const r = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: SENTENCE, messageId: 'm-add2', private: true });
+    expect(r.json.reply.answer).toMatchObject({ intent: 'added', private: true });
+    expect(s.svc.view(IDS.lin).inputs['in-m-add2']!.privateTo).toBe(IDS.lin);
+    expect(s.svc.view(IDS.zhou).inputs['in-m-add2']).toBeUndefined();
+    const x = s.svc.view(IDS.lin).inputs['in-m-add2']!.extracts[0]!;
+    await http(s.base, TOKENS.lin, 'POST', '/v1/commands', cmd('extract.accepted', { inputId: 'in-m-add2', extractId: x.id, needId: 'need-add2-0' }));
+    expect(s.svc.view(IDS.lin).needs['need-add2-0']!.privateTo).toBe(IDS.lin);
+    expect(s.svc.view(IDS.zhou).needs['need-add2-0']).toBeUndefined();
+  });
+
+  it('a short message the rules cannot place is classified: add goes to To confirm, question to the answer path', async () => {
+    fake.classifyAs = 'add';
+    const add = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: 'research talk slides', messageId: 'm-add3' });
+    expect(add.json.reply.answer.intent).toBe('added');
+    fake.classifyAs = 'question';
+    const q = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: 'CSV export status', messageId: 'm-q1' });
+    expect(q.json.reply).toMatchObject({ source: 'deepseek', answer: { intent: 'retrieval' } });
+    expect(s.svc.view(IDS.lin).inputs['in-m-q1']).toBeUndefined();
+  });
+
+  it('bad JSON from the extractor falls back to the rule detector', async () => {
+    fake.extractJson = 'not json';
+    try {
+      const r = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: SENTENCE, messageId: 'm-add4' });
+      expect(r.json.reply).toMatchObject({ source: 'rules', provider: 'rules/1', answer: { intent: 'added' } });
+      expect(r.json.reply.answer.items.map((x: { text: string }) => x.text)).toEqual(['做一个research talk的slides', '准备一下leetcode的题目']);
+    } finally {
+      fake.extractJson = new FakeModel().extractJson;
+    }
+  });
+
   it('with no model configured the rule answer comes back marked not_configured', async () => {
     const r = await new ProjectAi(null).ask(s.svc.view(IDS.lin), { userId: IDS.lin, scope: { kind: 'project', projectId: 'p1' }, text: 'CSV export?', today: TODAY }, 'en');
     expect(r).toMatchObject({ source: 'rules', fallback: 'not_configured', provider: 'rules/1' });
+  });
+});
+
+describe('content to add with AI off: the rules alone decide', () => {
+  let s: TestServer;
+  beforeAll(async () => {
+    s = await withServer();
+    await seedTeam(s.base);
+  });
+  afterAll(async () => {
+    await s.stop();
+  });
+
+  it('the user sentence yields 2 new extracts in To confirm, through the agent and through New input', async () => {
+    const r = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: SENTENCE, messageId: 'm-off1' });
+    expect(r.json.reply).toMatchObject({ source: 'rules', provider: 'rules/1', simulated: true, answer: { intent: 'added', inputId: 'in-m-off1' } });
+    const x = s.svc.view(IDS.lin).inputs['in-m-off1']!.extracts;
+    expect(x.map((e) => [e.type, e.text, e.state])).toEqual([
+      ['new', '做一个research talk的slides', null],
+      ['new', '准备一下leetcode的题目', null],
+    ]);
+    const imp = await http(s.base, TOKENS.lin, 'POST', '/v1/projects/p1/inputs', { inputId: 'in-off2', title: 't', kind: 'md', blobHash: null, text: SENTENCE, from: null, date: TODAY, private: false });
+    expect(imp.json.extracts).toBe(2);
+  });
+
+  it('a real question still gets an answer, not an import', async () => {
+    const r = await http(s.base, TOKENS.lin, 'POST', '/v1/agent/ask', { projectId: 'p1', question: '为什么要导出 CSV？', messageId: 'm-off3' });
+    expect(r.json.reply.answer.intent).not.toBe('added');
+    expect(s.svc.view(IDS.lin).inputs['in-m-off3']).toBeUndefined();
   });
 });
 

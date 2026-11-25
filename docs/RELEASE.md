@@ -7,7 +7,7 @@ app reads. The workflow and the updater are adapted from Gleeok's.
 ## Cut a release
 
 1. Pick the version, `X.Y.Z`. The workflow takes it from the tag, so `apps/desktop/package.json`
-   only needs bumping when the repo itself should show it (it is `0.1.2` now).
+   only needs bumping when the repo itself should show it (it is `0.1.3` now).
 2. Tag the commit and push the tag:
 
    ```sh
@@ -124,3 +124,15 @@ reaches it only through two bridge calls, `updatesCheck()` and `updatesInstall()
 - Windows is not code-signed, so SmartScreen warns on the first install.
 - The macOS swap and the Windows path have been tested only in unit tests (on Linux) and have not
   run on a real machine yet.
+
+## Hot updates (beta channel)
+
+Every push to `main` of the public repo runs `.github/workflows/beta.yml`. It builds the app code alone
+(no Electron), packs it with `apps/desktop/scripts/hot-pack.mjs` and uploads `hot-<commit>.zip` and
+`hot.json` to the rolling `beta` prerelease. `hot.json` is signed with Ed25519 by the `HOT_SIGNING_KEY`
+secret (`~/work/meetless-signing/hot-ed25519.key` on the dev server; the public key is in
+`apps/desktop/src/main/hot-update.ts`). Installed builds check it on start and every 15 minutes, and take
+it only when the signature, the shell (Electron version, ABI and fuses), the SHA-512, the size and the zip
+entries check out. A renderer-only change reloads the window when the user is idle; anything else asks for
+a restart. A copy that does not start is dropped and the bundled code runs. A change to Electron, the fuses
+or the packaging needs a full release (a `v*` tag), as before.

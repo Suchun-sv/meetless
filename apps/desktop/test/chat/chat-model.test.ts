@@ -77,18 +77,42 @@ describe('askCommands (AI on)', () => {
       asked.push(req);
       return { ok: true, data: { reply: gen } };
     });
-    expect(asked).toEqual([{ projectId: 'sample-atlas', question: 'N2 为什么改了' }]);
+    expect(asked).toEqual([{ projectId: 'sample-atlas', question: 'N2 为什么改了', messageId: 'm-ai1', private: false }]);
     expect(replyOf(cmds)).toEqual(gen);
-    expect(replyLabel(gen)).toEqual({ generated: true, note: 'ch.genNote' });
+    expect(replyLabel(gen)).toEqual({ generated: true, label: 'app.deepseek', note: 'ch.genNote' });
   });
 
   it('with the server out of reach the local rule answer is used, marked offline', async () => {
     const cmds = await askCommands(s, 'u-alex', 'sample-atlas', 'N2 为什么改了', today, now, 'm-ai2', async () => ({ ok: false, code: 'NETWORK' }));
     const r = replyOf(cmds);
     expect(r).toMatchObject({ provider: 'rules/1', simulated: true, source: 'rules', fallback: 'offline', answer: { intent: 'retrieval' } });
-    expect(replyLabel(r)).toEqual({ generated: false, note: 'ch.fellBack' });
+    expect(replyLabel(r)).toEqual({ generated: false, label: 'app.rules', note: 'ch.fellBack' });
     const thrown = await askCommands(s, 'u-alex', 'sample-atlas', 'N2 为什么改了', today, now, 'm-ai3', () => Promise.reject(new Error('down')));
     expect(replyOf(thrown).fallback).toBe('offline');
+  });
+
+  it('content to add goes to the server under the privacy switch, even with AI off; offline it keeps the manual import row', async () => {
+    const asked: unknown[] = [];
+    const added: AgentReply = { answer: { intent: 'added', projectId: 'sample-atlas', inputId: 'in-m-ai5', private: true, items: [], cites: [] }, provider: 'rules/1', simulated: true, source: 'rules' };
+    const text = '需要：1. 做一个research talk的slides； 2. 准备一下leetcode的题目';
+    const cmds = await askCommands(s, 'u-alex', 'sample-atlas', text, today, now, 'm-ai5', async (req) => {
+      asked.push(req);
+      return { ok: true, data: { reply: added } };
+    }, { ai: false, priv: true });
+    expect(asked).toEqual([{ projectId: 'sample-atlas', question: text, messageId: 'm-ai5', private: true }]);
+    expect(replyOf(cmds)).toEqual(added);
+    expect(replyLabel(added)).toMatchObject({ label: 'ai.rules', note: 'ch.addNote' });
+    const offline = await askCommands(s, 'u-alex', 'sample-atlas', text, today, now, 'm-ai6', async () => ({ ok: false, code: 'NETWORK' }), { ai: false });
+    expect(replyOf(offline).answer.intent).toBe('asInput');
+  });
+
+  it('with AI off a free question stays local', async () => {
+    let calls = 0;
+    await askCommands(s, 'u-alex', 'sample-atlas', 'N2 为什么改了', today, now, 'm-ai7', async () => {
+      calls++;
+      return { ok: false, code: 'NETWORK' };
+    }, { ai: false });
+    expect(calls).toBe(0);
   });
 
   it('intents stay local and never call the server', async () => {

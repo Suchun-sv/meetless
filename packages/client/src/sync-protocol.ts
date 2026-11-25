@@ -10,7 +10,8 @@ export type ServerMessage =
   | { type: 'events'; events: DomainEvent[]; cursor: Seq; head: Seq; epoch: Id | null }
   | { type: 'synced'; cursor: Seq; head: Seq; epoch: Id | null }
   | { type: 'reset'; reason: string }
-  | { type: 'error'; code: string };
+  | { type: 'error'; code: string }
+  | { type: 'build'; hash: string };
 
 /** Where a client keeps the visible log: `LocalCache` (SQLite) or `MemorySyncStore`. */
 export interface SyncStore {

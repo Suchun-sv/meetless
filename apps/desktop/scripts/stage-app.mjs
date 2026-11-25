@@ -14,7 +14,7 @@ const desktop = resolve(import.meta.dirname, '..');
 const pkg = JSON.parse(readFileSync(resolve(desktop, 'package.json'), 'utf8'));
 const out = resolve(desktop, 'release/app');
 
-for (const f of ['dist/main/main.cjs', 'dist/preload/preload.cjs', 'dist/renderer/index.html']) {
+for (const f of ['dist/boot.cjs', 'dist/pick.cjs', 'dist/build.json', 'dist/shell.json', 'dist/main/main.cjs', 'dist/preload/preload.cjs', 'dist/renderer/index.html']) {
   if (!existsSync(resolve(desktop, f))) throw new Error(`missing ${f}: run "pnpm build" first`);
 }
 

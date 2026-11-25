@@ -13,9 +13,15 @@ import './update.css';
 
 /** Asks the main process for the update state on mount and follows its `update` events. Shows nothing without an updater. */
 export function UpdateEntry() {
-  const { bridge } = useApp();
+  const { bridge, notify, t } = useApp();
   const [state, setState] = useState<UpdateState | null>(null);
   const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    // The window was reloaded into a renderer-only hot update (src/main/hot-update.ts).
+    const updated = new URLSearchParams(window.location.search).get('updated');
+    if (updated && /^[0-9a-f]{7}$/.test(updated)) notify('info', t('upd.hotUpdated', { c: updated }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     let alive = true;
     const off = bridge.subscribe((e) => {
@@ -65,11 +71,26 @@ export function UpdateView({
   onRetry?: () => void;
 }) {
   const { t, tr } = useApp();
+  // The version and the hot commit running, then a hot update waiting for a restart.
+  const hotLine = state?.hot ? (
+    <div className="upd-s faint" data-testid="update-version">
+      {`v${state.current}${state.hot.commit ? ` ${state.hot.commit}` : ''}`}
+      {state.hot.restart && !state.available && (
+        <>
+          {' '}
+          <button type="button" className="link upd-go" data-testid="update-restart" onClick={onInstall}>
+            {t('upd.hotRestart')}
+          </button>
+        </>
+      )}
+    </div>
+  ) : null;
   if (!state?.available) {
-    if (!state?.checkError || !onRetry) return null;
+    if (!state?.checkError || !onRetry) return hotLine ? <div className="upd" data-testid="update">{hotLine}</div> : null;
     // A failed check (network, proxy, timeout) says so, instead of showing nothing.
     return (
       <div className="upd" data-testid="update">
+        {hotLine}
         <button type="button" className="link upd-s tone-danger" data-testid="update-retry" onClick={onRetry}>
           {t('upd.checkFailed')}
         </button>

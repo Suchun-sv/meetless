@@ -37,7 +37,7 @@ export function Thread({ scope, pending = null }: { scope: 'home' | Id; pending?
               <div className="msg-a" data-testid="msg-a" data-source={label.generated ? 'deepseek' : 'rules'}>
                 <Reply reply={m.reply} scope={scope} messageId={m.id} />
                 <Pill tone="ai" title={t(label.generated ? 'app.deepseekTip' : 'app.rulesTip')}>
-                  {t(label.generated ? 'app.deepseek' : 'app.rules')}
+                  {t(label.label)}
                 </Pill>
                 <div className="faint small">{t(label.note)}</div>
               </div>

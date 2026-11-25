@@ -114,7 +114,11 @@ export interface ApiSpec {
   /** Token-agnostic setup instructions (the Agents page's own text); `<TOKEN>` is a placeholder. */
   'agent.guide': { req: Record<string, never>; res: { markdown: string } };
   /** One question to the project agent, answered from the caller's own view (generated, or the rule answer as fallback). */
-  'agent.ask': { req: { projectId: Id | 'home'; question: string; threadId?: Id }; res: { reply: AgentReply } };
+  /**
+   * Content to add (需要：1. ... 2. ...) is imported as the input `in-<messageId>` (private with
+   * `private: true`, the composer's 「仅自己」) and answered with intent `added`.
+   */
+  'agent.ask': { req: { projectId: Id | 'home'; question: string; threadId?: Id; messageId?: Id; private?: boolean }; res: { reply: AgentReply } };
   'inputs.import': {
     req: {
       projectId: Id;

@@ -26,6 +26,22 @@ The answer is checked before it is shown. Cite ids the model made up are dropped
 become the need chips and material chips under the answer. Markdown, bullets and dot symbols are removed.
 The reply is stored in the asker's private chat thread like any other answer.
 
+## Content to add
+
+Text given to add rather than asked (需要：1. ... 2. ..., TODO:, a numbered or ；-separated list, several
+lines, or anything longer than 80 characters that is not a question) is imported as an input (source 消息)
+and its items go to 待确认 / To confirm. Nothing becomes a need until someone accepts it; the reply offers
+「全部接受」 and 「去确认」. The composer's 「仅自己」 makes the input, its extracts and the needs they make
+private. The New input button and pasted text take the same path.
+
+- The rules decide first. Only a short message with no question shape and no add shape is sent to
+  DeepSeek to classify (question, add or command): the message alone, one word back.
+- With AI on, the items are extracted by DeepSeek. It gets the message (up to 8,000 characters) and the
+  codes and titles of the needs a revision may name (shared needs only, unless the input is private), and
+  returns JSON that is checked strictly: known types only, dots removed, at most 8 items, a revision only
+  for a listed code. Anything else falls back to the rule detector, which also splits numbered and
+  ；-separated lists into separate items. These replies are labelled 「DeepSeek 识别」 or 「规则识别」.
+
 ## Turning it on and off
 
 On the server, set:

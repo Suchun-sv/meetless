@@ -47,3 +47,6 @@
   .signin-card{padding:var(--space-5) var(--space-4)}
   .np-form{max-width:100%}
 }
+
+/* The web's "new version" offer (App.tsx NewBuild): bottom centre, above everything. */
+.new-build{position:fixed;left:50%;bottom:var(--space-6);transform:translateX(-50%);z-index:100;background:var(--color-surface);box-shadow:var(--shadow-sm)}

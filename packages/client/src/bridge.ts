@@ -76,7 +76,9 @@ export type BridgeEvent =
   | { type: 'outbox'; outbox: OutboxItem[] }
   | { type: 'session'; session: Session | null; locale: string | null }
   /** The app's own update state changed (Electron only): a check finished or an install moved on. */
-  | { type: 'update'; update: UpdateState };
+  | { type: 'update'; update: UpdateState }
+  /** Web only: the server serves a newer renderer build than this page's. */
+  | { type: 'newBuild' };
 
 /**
  * The desktop app's own updates (Electron main, src/main/release-updater.ts). `install: 'manual'`
@@ -94,6 +96,8 @@ export interface UpdateState {
   error: string | null;
   /** `UPDATE_CHECK` when the last check failed (network, proxy, timeout); the UI offers a retry. */
   checkError?: string | null;
+  /** Hot updates (beta channel): the short commit running, and whether a verified one waits for a restart. */
+  hot?: { commit: string | null; restart: boolean };
 }
 
 /** A local git repository the user chose. Never carries the local path. */

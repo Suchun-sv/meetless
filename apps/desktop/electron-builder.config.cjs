@@ -21,12 +21,7 @@ const signMac = require('./scripts/sign-mac.cjs');
  * bundle loaded from file://, which needs it) and embedded asar integrity validation (not yet
  * tried on a real Mac or Windows build).
  */
-const FUSES = {
-  runAsNode: false,
-  enableNodeOptionsEnvironmentVariable: false,
-  enableNodeCliInspectArguments: false,
-  onlyLoadAppFromAsar: true,
-};
+const { FUSES } = require('./scripts/fuses.cjs');
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {

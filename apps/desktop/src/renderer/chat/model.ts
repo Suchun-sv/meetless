@@ -87,24 +87,32 @@ export function sendCommands(s: State, me: Id, scope: 'home' | Id, text: string,
 /** The server's `agent.ask`, as the app's `api` gives it. */
 export type AskFn = (req: ApiRequest<'agent.ask'>) => Promise<Result<{ data: { reply: AgentReply } }>>;
 
+/** Whether a typed message needs the server: content to add (always), or a free question when `ai` is on. */
+export function needsServer(local: AgentReply, ai: boolean): boolean {
+  return local.answer.intent === 'asInput' || (ai && isFreeQuestion(local.answer));
+}
+
 /**
- * The commands a typed question produces when the server answers free questions with a model
- * (`me.ai.enabled`): intents stay with the local rules, as in `sendCommands`; a free question goes
- * to `agent.ask`. When the server cannot be reached the local rule answer is used, marked
- * `fallback: 'offline'`.
+ * The commands a typed message produces through the server's `agent.ask`. Content to add
+ * (`asInput`) is imported there into To confirm, under the composer's privacy `priv`; a free
+ * question is answered by the model (or may turn out to be content to add). Other intents stay
+ * with the local rules, as in `sendCommands`. When the server cannot be reached the local rule
+ * answer is used: `fallback: 'offline'` on a question, the manual import row on content.
  */
-export async function askCommands(s: State, me: Id, scope: 'home' | Id, text: string, today: IsoDate, now: IsoTime, messageId: Id, ask: AskFn): Promise<U1Command[]> {
+export async function askCommands(s: State, me: Id, scope: 'home' | Id, text: string, today: IsoDate, now: IsoTime, messageId: Id, ask: AskFn, opts: { ai?: boolean; priv?: boolean } = {}): Promise<U1Command[]> {
   const local = answer(s, { userId: me, scope: agentScope(scope), text, today });
-  if (!isFreeQuestion(local.answer)) return sendCommands(s, me, scope, text, today, now, messageId);
-  const r = await ask({ projectId: scope, question: text }).catch(() => null);
-  const reply: AgentReply = r?.ok ? r.data.reply : { ...local, source: 'rules', fallback: 'offline' };
+  if (!needsServer(local, opts.ai !== false)) return sendCommands(s, me, scope, text, today, now, messageId);
+  const r = await ask({ projectId: scope, question: text, messageId, private: opts.priv === true }).catch(() => null);
+  const reply: AgentReply = r?.ok ? r.data.reply : local.answer.intent === 'asInput' ? local : { ...local, source: 'rules', fallback: 'offline' };
   return [{ type: 'chat.asked', payload: { messageId, scope, text, reply } }];
 }
 
 /** The reply's label: who wrote it, and the note under it (the fallback reason, when it fell back). */
-export function replyLabel(reply: AgentReply): { generated: boolean; note: 'ch.genNote' | 'ch.sim' | 'ch.fellBack' } {
-  if (reply.source === 'deepseek') return { generated: true, note: 'ch.genNote' };
-  return { generated: false, note: reply.fallback && reply.fallback !== 'not_configured' ? 'ch.fellBack' : 'ch.sim' };
+export function replyLabel(reply: AgentReply): { generated: boolean; label: 'app.deepseek' | 'app.rules' | 'ai.deepseek' | 'ai.rules'; note: 'ch.genNote' | 'ch.sim' | 'ch.fellBack' | 'ch.addNote' } {
+  // Content added to To confirm is labelled as detection: 「DeepSeek 识别」 or 「规则识别」.
+  if (reply.answer.intent === 'added') return { generated: reply.source === 'deepseek', label: reply.source === 'deepseek' ? 'ai.deepseek' : 'ai.rules', note: 'ch.addNote' };
+  if (reply.source === 'deepseek') return { generated: true, label: 'app.deepseek', note: 'ch.genNote' };
+  return { generated: false, label: 'app.rules', note: reply.fallback && reply.fallback !== 'not_configured' ? 'ch.fellBack' : 'ch.sim' };
 }
 
 /** What clicking a chip does: commands to send, a need to open, or an overlay to show. */

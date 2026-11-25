@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DETECTOR_ID, DomainError, detectExtracts, homeItems, needVersion, openConflicts, riskList, toParagraphs, toConfirm, waitingCount, type DomainErrorCode, type ExtractInput } from '../src/index';
+import { DETECTOR_ID, DomainError, detectExtracts, homeItems, looksLikeAdd, looksLikeQuestion, needVersion, openConflicts, riskList, toItems, toParagraphs, toConfirm, waitingCount, type DomainErrorCode, type ExtractInput } from '../src/index';
 import { atlas, P, R, U } from './log';
 
 const rejects = (fn: () => unknown, code: DomainErrorCode) => {
@@ -194,5 +194,33 @@ describe('conflict resolution', () => {
     log.emit('conflict.resolved', U.zhou, { conflictId: c.id, resolution: 'revise' });
     expect(log.state.conflicts[c.id]!.status).toBe('resolved');
     expect(log.state.needs['n-export']!.accept).toBe('Exports must include all customer fields.');
+  });
+});
+
+describe('content to add: looksLikeAdd, looksLikeQuestion, toItems', () => {
+  const SENTENCE = '需要：1. 做一个research talk的slides； 2. 准备一下leetcode的题目';
+  it('the user sentence is an add, split into its two items, each a new need', () => {
+    expect(looksLikeAdd(SENTENCE)).toBe(true);
+    const { paras, lead } = toItems(SENTENCE, 'p');
+    expect(paras.map((p) => p.text)).toEqual(['做一个research talk的slides', '准备一下leetcode的题目']);
+    expect(detectExtracts(paras, [], 8, lead).map((x) => [x.type, x.text])).toEqual([
+      ['new', '做一个research talk的slides'],
+      ['new', '准备一下leetcode的题目'],
+    ]);
+  });
+  it('other add shapes; questions are never adds', () => {
+    expect(looksLikeAdd('TODO: write the abstract')).toBe(true);
+    expect(looksLikeAdd('1、整理数据 2、跑基线')).toBe(true);
+    expect(looksLikeAdd('补实验；改摘要')).toBe(true);
+    expect(looksLikeAdd('需要：搞清楚为什么慢')).toBe(true);
+    expect(looksLikeAdd('为什么要做消融实验？')).toBe(false);
+    expect(looksLikeAdd('Why do we need the ablation study')).toBe(false);
+    expect(looksLikeAdd('added the export yesterday')).toBe(false);
+    expect(looksLikeQuestion('N2 为什么改了')).toBe(true);
+  });
+  it('a list under an add line, one item per line; a decimal is not a marker', () => {
+    const { paras, lead } = toItems('需要：\n1. 跑 1.5 倍学习率\n2. 画图', 'p');
+    expect(paras.map((p) => p.text)).toEqual(['跑 1.5 倍学习率', '画图']);
+    expect([...lead]).toEqual(['p1', 'p2']);
   });
 });

@@ -29,6 +29,88 @@ export function toParagraphs(text: string, idPrefix = 'p'): Paragraph[] {
     .map((t, i) => ({ id: `${idPrefix}${i + 1}`, text: t }));
 }
 
+/** A leading "add this" word: 需要：, 新增, TODO:, add:, ... (bare 要 / 加 only with a colon). */
+const ADD_LEAD = /^\s*(?:(?:需要|新增|添加|增加|加上|待办)\s*[:：]?|(?:todo|to-?do|add|needs?(?:\s+to)?)(?![a-z])\s*[:：]?|(?:要|加)\s*[:：])\s*/i;
+/** An item marker inside a line: 1. 2、 3) （4） ①, not a decimal like 1.5. */
+const ENUM = /(?:^|(?<=[\s；;，,：:。]))(?:[（(]\d{1,2}[)）]|\d{1,2}[.、)）](?!\d)|[①②③④⑤⑥⑦⑧⑨⑩])\s*/g;
+const LIST_LINE = /^\s*(?:[-*+•]\s+|[（(]?\d{1,2}[.、)）](?!\d)|[①②③④⑤⑥⑦⑧⑨⑩])/;
+const QUESTION_ZH = /(为什么|为何|怎么|怎样|如何|什么|哪|谁|是否|有没有|能不能|可不可以|要不要|是不是|多少|几个|吗|呢)/;
+const QUESTION_EN = /^\s*(?:why|what|how|when|where|who|whom|whose|which|is|are|was|were|do|does|did|can|could|should|would|will|has|have|any)\b/i;
+
+/** A question to the agent, by its shape: a question mark at the end, a Chinese question word, or a leading English one. */
+export function looksLikeQuestion(text: string): boolean {
+  const t = text.trim();
+  return /[?？]\s*$/.test(t) || QUESTION_ZH.test(t) || QUESTION_EN.test(t);
+}
+
+/** The pieces of one line: split at item markers (two or more), else at ；/; when `split` (an add context). */
+function splitLine(line: string, split: boolean): string[] {
+  const marks = [...line.matchAll(ENUM)];
+  let parts: string[];
+  if (marks.length >= 2) {
+    parts = [];
+    const head = line.slice(0, marks[0]!.index).trim();
+    // A heading before the list ("下周：") is not an item.
+    if (head && !/[:：]$/.test(head)) parts.push(head);
+    marks.forEach((m, i) => parts.push(line.slice(m.index + m[0].length, marks[i + 1]?.index ?? line.length)));
+  } else if (split) {
+    parts = line.split(/[；;]/);
+  } else {
+    parts = [line];
+  }
+  return parts.map((x) => x.replace(/^[\s,，、]+|[\s；;，,、。]+$/g, '').trim()).filter((x) => x.length > 0);
+}
+
+/**
+ * Text someone gives the agent to add, not to ask about: a leading add word (需要：, TODO:, add:),
+ * two or more numbered items, or several ；-separated parts. Never a question.
+ */
+export function looksLikeAdd(text: string): boolean {
+  const t = text.trim();
+  if (!t || /[?？]\s*$/.test(t)) return false;
+  const lead = ADD_LEAD.exec(t)?.[0] ?? '';
+  // An add word with a colon, or a numbered list, wins over a question word inside an item.
+  if (/[:：]\s*$/.test(lead) || [...t.matchAll(ENUM)].length >= 2) return true;
+  if (looksLikeQuestion(t)) return false;
+  if (lead.trim()) return true;
+  return t.split(/[；;]/).filter((x) => x.trim().length > 1).length >= 2;
+}
+
+/**
+ * Paragraphs for an import, one per item: one per line as in `toParagraphs`, and a line that
+ * enumerates (1. a 2. b, 1、a；2、b) one per item. `lead` holds the items that come under an add
+ * word (需要：...), or every item when `addAll` (text the user gave the agent to add); the
+ * detector proposes those as new needs even without a need word.
+ */
+export function toItems(text: string, idPrefix = 'p', opts: { addAll?: boolean } = {}): { paras: Paragraph[]; lead: Set<string> } {
+  const paras: Paragraph[] = [];
+  const lead = new Set<string>();
+  let under = false;
+  for (const raw of text.split(/\r?\n+/)) {
+    let line = raw.trim();
+    if (!line) continue;
+    const m = ADD_LEAD.exec(line);
+    const isList = LIST_LINE.test(line);
+    if (m && /[:：]\s*$/.test(m[0])) {
+      under = true;
+      line = line.slice(m[0].length);
+    } else if (!isList) {
+      under = false;
+    }
+    line = line.replace(/^\s*(#{1,6}\s+|>\s*|[-*+•]\s+)/, '').trim();
+    const addCtx = opts.addAll === true || under;
+    const pieces = splitLine(line, addCtx);
+    // A lone list line ("1. 做 slides") loses its marker, as `toParagraphs` drops "1. ".
+    for (const piece of pieces.length === 1 ? [pieces[0]!.replace(/^\s*(?:[（(]?\d{1,2}[.、)）](?!\d)|[①②③④⑤⑥⑦⑧⑨⑩])\s*/, '')] : pieces) {
+      if (!piece) continue;
+      const id = `${idPrefix}${paras.length + 1}`;
+      paras.push({ id, text: piece });
+      if (addCtx) lead.add(id);
+    }
+  }
+  return { paras, lead };
+}
+
 function numbers(s: string): Set<string> {
   return new Set([...s.matchAll(/\d+(?:\.\d+)?/g)].map((m) => m[0]));
 }
@@ -65,7 +147,7 @@ export function matchNeed(text: string, needs: Need[]): { needId: Id; by: 'code'
  * and asks for a change becomes a revision; if it contradicts the need
  * ("all fields" vs "12 core fields") it is marked as a conflict.
  */
-export function detectExtracts(paras: Paragraph[], needs: Need[], max = 8): ExtractInput[] {
+export function detectExtracts(paras: Paragraph[], needs: Need[], max = 8, lead: ReadonlySet<string> = new Set()): ExtractInput[] {
   const out: ExtractInput[] = [];
   for (const p of paras) {
     if (out.length >= max) break;
@@ -87,7 +169,7 @@ export function detectExtracts(paras: Paragraph[], needs: Need[], max = 8): Extr
       out.push({ id, type: 'hyp', text: clip(t, 160), paraId: p.id, expect: clip(t, 160), verify: null });
       continue;
     }
-    if (NEED_WORDS.test(t)) {
+    if (NEED_WORDS.test(t) || lead.has(p.id)) {
       out.push({ id, type: 'new', text: clip(t, 160), paraId: p.id, accept: null });
       continue;
     }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { MeetlessBridge } from '@meetless/client/bridge';
 import { AppProvider, useApp } from './app/AppContext';
 import { SignIn } from './setup/SignIn';
@@ -31,5 +32,23 @@ function NoBridge() {
 
 function Root() {
   const { snapshot } = useApp();
-  return snapshot.session ? <Shell /> : <SignIn />;
+  return (
+    <>
+      {snapshot.session ? <Shell /> : <SignIn />}
+      <NewBuild />
+    </>
+  );
+}
+
+/** Web: the server has a newer renderer build than this page (a `newBuild` event): offer a refresh. */
+function NewBuild() {
+  const { bridge, t } = useApp();
+  const [shown, setShown] = useState(false);
+  useEffect(() => bridge.subscribe((e) => e.type === 'newBuild' && setShown(true)), [bridge]);
+  if (!shown) return null;
+  return (
+    <button type="button" className="chip new-build" data-testid="new-build" onClick={() => window.location.reload()}>
+      {t('web.newBuild')}
+    </button>
+  );
 }

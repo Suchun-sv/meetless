@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
-import { chatMessages, type Id, type Suggestion } from '@meetless/core';
+import { answer, chatMessages, type Id, type Suggestion } from '@meetless/core';
 import { useApp } from '../app/AppContext';
 import { newId } from '../model/ids';
 import { useAiEnabled } from './ai';
@@ -7,6 +7,7 @@ import { registerComposer } from './focus';
 import { routeErrorText } from '../setup/model';
 import {
   acceptsFile,
+  agentScope,
   askCommands,
   chipLabel,
   chipOutcome,
@@ -16,7 +17,9 @@ import {
   fileImport,
   getPriv,
   importResult,
+  needsServer,
   onDashboardFor,
+  recordSentPriv,
   recordSentPrivFor,
   setPriv,
   sendCommands,
@@ -83,10 +86,13 @@ export function Composer({ scope, inline }: { scope: 'home' | Id; inline?: boole
     setText('');
     const messageId = newId('msg');
     let cmds: U1Command[];
-    if (ai) {
+    const sendPriv = scope !== 'home' && priv;
+    if (needsServer(answer(live, { userId: me, scope: agentScope(scope), text: value, today }), ai)) {
       setPending(value);
+      // The switch the message is sent under; the server imports content under it (ruling R21).
+      recordSentPriv(messageId, sendPriv);
       try {
-        cmds = await askCommands(live, me, scope, value, today, new Date().toISOString(), messageId, (req) => api('agent.ask', req));
+        cmds = await askCommands(live, me, scope, value, today, new Date().toISOString(), messageId, (req) => api('agent.ask', req), { ai, priv: sendPriv });
       } finally {
         setPending(null);
       }

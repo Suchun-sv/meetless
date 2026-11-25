@@ -1,11 +1,12 @@
-import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, net, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, powerMonitor, session, shell } from 'electron';
 import { isWebUrl } from '@meetless/core';
 import { BRIDGE_METHODS, ClientNode, createFileLog, type BridgeEvent, type BridgeMethod, type FileLog, type MeetlessBridge } from '@meetless/client';
 import { invokeChannel, PUSH_CHANNEL } from '../shared/ipc';
 import { BUILD_CHANNEL, BUILD_LABEL, BUILD_NOTE } from './build-info';
+import { HotUpdater, type BuildInfo, type Shell } from './hot-update';
 import { installKind, ReleaseUpdater } from './release-updater';
 import { runSmokeChecks } from './smoke-checks';
 
@@ -131,6 +132,9 @@ function runApp(): void {
     }
   };
 
+  /** The renderer to load: the bundled one, or a reload-only hot update's once it was applied. */
+  let rendererFile = join(__dirname, '../renderer/index.html');
+
   async function createWindow(): Promise<void> {
     win = new BrowserWindow({
       width: 1440,
@@ -168,11 +172,15 @@ function runApp(): void {
     win.webContents.on('will-frame-navigate', (e) => {
       if (!e.isMainFrame && !(e.url.startsWith('http://127.0.0.1:55435/') || e.url === 'about:blank')) e.preventDefault();
     });
-    win.webContents.on('did-finish-load', () => log('renderer loaded'));
+    win.webContents.on('did-finish-load', () => {
+      log('renderer loaded');
+      // A hot copy that got this far started fine (src/boot/boot.cjs).
+      (globalThis as { __meetlessHot?: { ready(): void } }).__meetlessHot?.ready();
+    });
     win.webContents.on('render-process-gone', (_e, d) => logError('renderer gone', d));
     log('window created', { inactive: INACTIVE });
     if (rendererUrl) await win.loadURL(rendererUrl);
-    else await win.loadFile(join(__dirname, '../renderer/index.html'));
+    else await win.loadFile(rendererFile);
   }
 
   app.setAboutPanelOptions({
@@ -185,6 +193,54 @@ function runApp(): void {
   // App updates (docs/RELEASE.md): checks on start and every 6 hours, installs only on the user's click.
   // A dev run checks only when pointed at a test server.
   const devUpdateBase = app.isPackaged ? undefined : process.env.MEETLESS_UPDATE_BASE;
+  // Hot updates from the beta channel (src/main/hot-update.ts), packaged builds only.
+  const readJson = <T>(f: string): T | null => {
+    try {
+      return JSON.parse(readFileSync(f, 'utf8')) as T;
+    } catch {
+      return null;
+    }
+  };
+  const runningBuild = readJson<BuildInfo>(join(__dirname, '../build.json'));
+  const installedShell = readJson<Shell>(join(app.getAppPath(), 'dist', 'shell.json'));
+  const runningHot = (globalThis as { __meetlessHot?: { commit: string } }).__meetlessHot?.commit ?? null;
+  const pushUpdate = () => {
+    const e: BridgeEvent = { type: 'update', update: { ...updater.current, hot: hotInfo() } };
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send(PUSH_CHANNEL, e);
+  };
+  const hot = new HotUpdater({
+    hotDir: join(app.getPath('userData'), 'hot'),
+    running: runningBuild ?? { commit: 'dev', version: app.getVersion(), built: new Date().toISOString(), parts: { main: '', preload: '', renderer: '' } },
+    shell: installedShell ?? { electron: process.versions.electron, abi: process.versions.modules, fuses: '' },
+    runningHot,
+    enabled: app.isPackaged && !!runningBuild && !!installedShell && process.env.MEETLESS_NO_HOT !== '1',
+    ...(process.env.MEETLESS_HOT_BASE && !app.isPackaged ? { baseUrl: process.env.MEETLESS_HOT_BASE } : {}),
+    fetch: (url, init) => net.fetch(url, init),
+    log: (m) => log(m),
+    onChange: (s) => {
+      pushUpdate();
+      if (s.pending?.apply === 'reload') reloadWhenIdle(s.pending.commit);
+    },
+  });
+  const hotInfo = () => {
+    const s = hot.state;
+    return { commit: (s.running ?? runningBuild?.commit ?? '').slice(0, 7) || null, restart: s.pending?.apply === 'restart' };
+  };
+  // A renderer-only update: reload into it once nobody has touched the machine for a minute.
+  let idleTimer: NodeJS.Timeout | null = null;
+  const reloadWhenIdle = (commit: string) => {
+    if (idleTimer) clearInterval(idleTimer);
+    idleTimer = setInterval(() => {
+      if (!win || powerMonitor.getSystemIdleTime() < 60) return;
+      clearInterval(idleTimer!);
+      idleTimer = null;
+      rendererFile = hot.rendererOf(commit);
+      log('hot reload', { commit: commit.slice(0, 7) });
+      void win.loadFile(rendererFile, { query: { updated: commit.slice(0, 7) } }).then(() => hot.applied(commit));
+    }, 15_000);
+    idleTimer.unref?.();
+  };
+
   const updater = new ReleaseUpdater({
     currentVersion: app.getVersion(),
     platform: process.platform,
@@ -202,10 +258,7 @@ function runApp(): void {
     // Chromium's network stack: the macOS system proxy and PAC apply, which Node's fetch ignores.
     fetch: (url, init) => net.fetch(url, init),
     resolveProxy: (url) => session.defaultSession.resolveProxy(url),
-    onChange: (update) => {
-      const e: BridgeEvent = { type: 'update', update };
-      for (const w of BrowserWindow.getAllWindows()) w.webContents.send(PUSH_CHANNEL, e);
-    },
+    onChange: () => pushUpdate(),
   });
 
   app.whenReady().then(async () => {
@@ -230,7 +283,18 @@ function runApp(): void {
         const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] }) : null;
         return r && !r.canceled ? (r.filePaths[0] ?? null) : null;
       },
-      updates: { check: () => updater.check(), install: () => updater.install() },
+      updates: {
+        check: async () => ({ ...(await updater.check()), hot: hotInfo() }),
+        // With no full release on offer, the click restarts into a hot update that needs it.
+        install: async () => {
+          if (!updater.current.available && hot.state.pending?.apply === 'restart') {
+            app.relaunch();
+            setTimeout(() => app.quit(), 300);
+            return { ok: true };
+          }
+          return updater.install();
+        },
+      },
     });
     log('client opened', { session: (await node.snapshot()).session !== null });
     node.subscribe((e) => {
@@ -255,6 +319,7 @@ function runApp(): void {
     }
     await createWindow();
     updater.start();
+    hot.start();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();
     });

@@ -1,4 +1,4 @@
-import { DETECTOR_ID, detectExtracts, INPUT_KINDS, projectNeeds, shareableView, toParagraphs } from '@meetless/core';
+import { DETECTOR_ID, detectExtracts, INPUT_KINDS, projectNeeds, shareableView, toItems } from '@meetless/core';
 import type { InputKind, Requester } from '@meetless/core';
 import type { ApiRequest, ApiResponse } from '@meetless/api';
 import type { Principal } from '../auth';
@@ -29,16 +29,18 @@ import { extractText, MAX_IMPORT_BYTES, MAX_IMPORT_CHARS } from './extract';
  * 3. A `blobHash` must exist and be readable by the caller (`NOT_AUTHORISED`), and no
  *    bigger than `MAX_IMPORT_BYTES` (`TOO_LARGE`), before its bytes are read.
  * 4. The resulting text must be no longer than `MAX_IMPORT_CHARS` (`TOO_LARGE`).
- * 5. `toParagraphs` splits it.
+ * 5. `toItems` splits it: one paragraph per line, and one per item of an enumeration.
  * 6. Detection runs against the importer's visible needs (private import) or only the
- *    shared ones (shared import).
+ *    shared ones (shared import): DeepSeek when the server has it (validated JSON), else, or
+ *    when that fails, the rule detector. `opts.addAll` (text given to the agent to add) makes
+ *    every item a candidate need for the rules.
  * 7. `service.submit` appends `input.imported`; a duplicate `inputId` is answered from
  *    the input already stored (no new append) — still the fallback for the cases step 1b
  *    does not short-circuit (concurrent first-time submits racing on the same id, etc.) —
  *    but only if that stored input is the caller's own in this project; otherwise
  *    `ALREADY_EXISTS { what: 'input', id }`.
  */
-export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'inputs.import'>): Promise<ApiResponse<'inputs.import'>> {
+export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'inputs.import'>, opts: { addAll?: boolean } = {}): Promise<ApiResponse<'inputs.import'>> {
   const inputId = reqString(req.inputId, 'inputId');
   const title = reqString(req.title, 'title');
   const kind = reqString(req.kind, 'kind') as InputKind;
@@ -76,10 +78,12 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
   }
   if (text.length > MAX_IMPORT_CHARS) throw new ApiError('TOO_LARGE');
 
-  const paras = toParagraphs(text, `${inputId}-p`);
+  const { paras, lead } = toItems(text, `${inputId}-p`, { addAll: opts.addAll === true });
   const view = deps.service.view(p.userId);
   const needs = isPrivate ? projectNeeds(view, req.projectId) : projectNeeds(shareableView(view), req.projectId);
-  const extracts = detectExtracts(paras, needs);
+  const byModel = deps.ai?.enabled ? await deps.ai.extract(p.userId, text, needs, paras) : null;
+  const extracts = byModel ?? detectExtracts(paras, needs, 8, lead);
+  const detector = byModel ? `deepseek/${deps.ai!.model}` : DETECTOR_ID;
 
   await deps.service.submit(p.userId, {
     id: `import:${inputId}`,
@@ -94,7 +98,7 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
       blobHash,
       body: paras,
       extracts,
-      detector: DETECTOR_ID,
+      detector,
       private: isPrivate,
     },
   });

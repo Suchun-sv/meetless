@@ -5,6 +5,9 @@ import { materialRoute } from '../app/routes';
 import { displayName } from '../model/state';
 import { NeedChip, Status } from '../ui/primitives';
 import { routeErrorText } from '../setup/model';
+import { runCmds } from '../collab/answer';
+import { extractCommand } from '../collab/confirm';
+import { newId } from '../model/ids';
 import { importCommand, importPriv, importResult, onDashboardFor } from './model';
 
 interface ReplyProps {
@@ -209,6 +212,44 @@ export function Reply({ reply, scope, messageId }: ReplyProps) {
         <>
           <div>{t('ch.cardOn', { name })}</div>
           {!onThisDash && <Row onClick={() => go(scope === 'home' ? { view: 'home' } : { view: 'dash', projectId: scope })}>{t('ch.openDash')}</Row>}
+        </>
+      );
+    }
+
+    case 'added': {
+      // What is still pending is read from `live`: accepted or ignored since, it is no longer offered.
+      const input = live.inputs[a.inputId];
+      const pending = input ? input.extracts.filter((x) => x.state === null) : [];
+      // A conflicting revision of a shared need is decided in To confirm, never accepted in bulk.
+      const bulk = input ? pending.filter((x) => !(x.conflict && input.privateTo === null)) : [];
+      const allNew = a.items.length > 0 && a.items.every((x) => x.type === 'new');
+      const head = a.items.length === 0 ? t('ans.added.none') : allNew ? t('ans.added.new', { n: a.items.length }) : t('ans.added', { n: a.items.length });
+      const acceptAll = () => (input ? runCmds(bulk.map((x) => extractCommand('accept', input, x, newId('n'))), submit) : Promise.resolve(false));
+      return (
+        <>
+          <div>{head}</div>
+          {a.items.map((it) => (
+            <div key={it.extractId} className="small" data-testid="added-item" data-type={it.type}>
+              {t(`in.x.${it.type}`)}
+              {it.type === 'rev' && it.needId ? `${SEP}${code(it.needId)}` : ''}
+              {SEP}
+              {it.text}
+            </div>
+          ))}
+          {pending.length > 0 ? (
+            <div className="row gap6 wrap">
+              {bulk.length > 0 && (
+                <Row testId="added-accept-all" onClick={() => void acceptAll()}>
+                  {t('ans.added.acceptAll')}
+                </Row>
+              )}
+              <Row testId="added-review" onClick={() => openOverlay({ kind: 'confirm', projectId: a.projectId })}>
+                {t('ans.added.review')}
+              </Row>
+            </div>
+          ) : (
+            a.items.length > 0 && input && <div className="small faint">{t('ans.added.done')}</div>
+          )}
         </>
       );
     }

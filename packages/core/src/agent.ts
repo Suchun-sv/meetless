@@ -1,9 +1,10 @@
 import { cardFromText, homeItems, weeklyCard } from './dashboard';
 import { currentRound } from './reducer';
 import { handoffStaleness, membersOf, needByCode, projectNeeds, questionId, questions, toConfirm } from './queries';
+import { looksLikeAdd, looksLikeQuestion } from './detect';
 import { groupByNeed, materialHits, search, type SearchHit } from './search';
 import { codesIn, daysBetween, tokens } from './text';
-import type { CardId, Id, NeedStatus, State } from './types';
+import type { CardId, ExtractType, Id, NeedStatus, State } from './types';
 
 /**
  * The project agent. There is one per project, shared by the team.
@@ -39,6 +40,11 @@ export type AgentAnswer =
   | { intent: 'delivery'; projectId: Id; roundId: Id | null; lines: { needId: Id; status: NeedStatus }[]; cites: Id[] }
   | { intent: 'addCard'; card: CardId; cites: Id[] }
   | { intent: 'asInput'; cites: Id[] }
+  /**
+   * Text given to add, imported by the server (`agent.ask`) as the input `inputId`, whose extracts
+   * wait in To confirm. `items` are those extracts as they were proposed; `private` is the input's.
+   */
+  | { intent: 'added'; projectId: Id; inputId: Id; private: boolean; items: { extractId: Id; type: ExtractType; text: string; needId: Id | null }[]; cites: Id[] }
   /** An actionable handoff: the need and the member named in the text (either may be missing). Project scope only. */
   | { intent: 'handoff'; projectId: Id; needId: Id | null; toId: Id | null; cites: Id[] }
   /** The user's handoffs whose recipient's agent holds an older context version. */
@@ -113,10 +119,13 @@ function memberIn(view: State, projectId: Id, userId: Id, text: string): Id | nu
 
 const memberProjects = (view: State, userId: Id) => Object.values(view.projects).filter((p) => p.memberIds.includes(userId)).map((p) => p.id);
 
-/** Long or multi-line text in a project looks like a new input rather than a question. */
+/**
+ * Text in a project that looks like content to add rather than a question: several lines, more
+ * than 80 characters, or the shape of an add (`looksLikeAdd`: 需要：..., a numbered list).
+ */
 export function looksLikeInput(text: string): boolean {
   const t = text.trim();
-  return /\n/.test(t) || t.length > 80;
+  return /\n/.test(t) || (t.length > 80 && !looksLikeQuestion(t)) || looksLikeAdd(t);
 }
 
 /** Code-point offset in `t` of the first word or Chinese bigram that is one of the question's tokens (0 if none). */

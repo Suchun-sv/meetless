@@ -106,6 +106,8 @@ class WebBridge implements MeetlessBridge {
   private listeners = new Set<(e: BridgeEvent) => void>();
   private ws: WebSocketLike | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The renderer build hash the server announced first (`build` messages). */
+  private build: string | null = null;
   private backoff: number;
   private resyncing = false;
   /** The first `GET /v1/me` (is the cookie still a session?), started by the first `snapshot()`. */
@@ -369,6 +371,11 @@ class WebBridge implements MeetlessBridge {
         return;
       case 'error':
         this.setStatus({ lastError: m.code });
+        return;
+      case 'build':
+        // The first hash is the build this page came from; a different one later is a newer build.
+        if (this.build === null) this.build = m.hash;
+        else if (m.hash !== this.build) this.emit({ type: 'newBuild' });
         return;
     }
   }
