@@ -193,6 +193,46 @@ function runApp(): void {
   // App updates (docs/RELEASE.md): checks on start and every 6 hours, installs only on the user's click.
   // A dev run checks only when pointed at a test server.
   const devUpdateBase = app.isPackaged ? undefined : process.env.MEETLESS_UPDATE_BASE;
+  /**
+   * Every updater request: the default session first (the system proxy and PAC); on a network-level
+   * failure (connection, proxy or tunnel error, timeout) once more through a session with no proxy,
+   * for a flaky local proxy port while a TUN route still works. The checks on the answer are the
+   * callers' own (final-URL allowlist, size caps, signature, SHA-512, codesign).
+   */
+  let directSession: Promise<Electron.Session> | null = null;
+  const NET_ERROR = /ERR_(CONNECTION|PROXY|TUNNEL)_|ERR_TIMED_OUT|ERR_EMPTY_RESPONSE|ERR_SOCKS/;
+  const netError = (e: unknown) => {
+    const err = e as { name?: string; message?: string } | null;
+    return err?.name === 'TimeoutError' || err?.name === 'AbortError' || NET_ERROR.test(String(err?.message ?? ''));
+  };
+  const hostOf = (url: string) => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return '';
+    }
+  };
+  async function updaterFetch(url: string, init: RequestInit): Promise<Response> {
+    try {
+      const res = await net.fetch(url, init);
+      log('updater request', { via: 'proxy', host: hostOf(url) });
+      return res;
+    } catch (e) {
+      if (!netError(e)) throw e;
+      directSession ??= (async () => {
+        const s = session.fromPartition('meetless-updater-direct');
+        await s.setProxy({ mode: 'direct' });
+        return s;
+      })();
+      const s = await directSession;
+      // A timed-out first try has used up its signal: the retry gets its own.
+      const signal = init.signal?.aborted ? AbortSignal.timeout(/\.zip(\?|$)/.test(url) ? 30 * 60_000 : 20_000) : init.signal;
+      const res = await s.fetch(url, { ...init, ...(signal ? { signal } : {}) });
+      log('updater request', { via: 'direct', host: hostOf(url), after: String((e as Error).message ?? e).slice(0, 80) });
+      return res;
+    }
+  }
+
   // Hot updates from the beta channel (src/main/hot-update.ts), packaged builds only.
   const readJson = <T>(f: string): T | null => {
     try {
@@ -215,7 +255,7 @@ function runApp(): void {
     runningHot,
     enabled: app.isPackaged && !!runningBuild && !!installedShell && process.env.MEETLESS_NO_HOT !== '1',
     ...(process.env.MEETLESS_HOT_BASE && !app.isPackaged ? { baseUrl: process.env.MEETLESS_HOT_BASE } : {}),
-    fetch: (url, init) => net.fetch(url, init),
+    fetch: updaterFetch,
     log: (m) => log(m),
     onChange: (s) => {
       pushUpdate();
@@ -256,7 +296,7 @@ function runApp(): void {
     },
     log: (m) => log(m),
     // Chromium's network stack: the macOS system proxy and PAC apply, which Node's fetch ignores.
-    fetch: (url, init) => net.fetch(url, init),
+    fetch: updaterFetch,
     resolveProxy: (url) => session.defaultSession.resolveProxy(url),
     onChange: () => pushUpdate(),
   });

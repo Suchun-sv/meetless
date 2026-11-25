@@ -7,7 +7,7 @@ app reads. The workflow and the updater are adapted from Gleeok's.
 ## Cut a release
 
 1. Pick the version, `X.Y.Z`. The workflow takes it from the tag, so `apps/desktop/package.json`
-   only needs bumping when the repo itself should show it (it is `0.1.5` now).
+   only needs bumping when the repo itself should show it (it is `0.1.6` now).
 2. Tag the commit and push the tag:
 
    ```sh
