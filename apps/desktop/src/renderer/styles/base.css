@@ -32,12 +32,14 @@ blockquote{margin:0;padding:var(--space-3) var(--space-4);border-radius:var(--ra
 /* ---------- Layout: sidebar, canvas, drawer column ---------- */
 .app{display:grid;grid-template-columns:var(--layout-sidebar) minmax(0,1fr);height:100%}
 .app.with-drawer{grid-template-columns:var(--layout-sidebar) minmax(0,1fr) var(--layout-drawer)}
-.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;container-type:inline-size;container-name:main}
+/* Nothing in the main column may push the page sideways: wide content scrolls inside its own card or board. */
+.main>*,.main .page>*,.board-v>*{min-width:0}
 .scroll{flex:1;overflow:auto;min-height:0;position:relative}
 .scroll.v-inputs,.scroll.v-artifacts{overflow:hidden}
 .page{padding:var(--space-6) var(--space-8) calc(var(--space-8) * 2);max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:var(--space-3)}
 .page>p{margin:0}
-.board-v{min-height:100%;display:flex;flex-direction:column}
+.board-v{min-height:100%;display:flex;flex-direction:column;min-width:0;max-width:100%}
 .board-v .page{width:100%}
 
 /* Pages that keep the composer under a three-pane layout */

@@ -34,10 +34,14 @@ export function Topbar() {
         {pid ? (
           <>
             {renaming === pid && model.projectName !== null ? (
-              <RenameInput key={pid} projectId={pid} name={model.projectName} className="crumb-inp" onDone={() => setRenaming(null)} />
+              <>
+                <RenameInput key={pid} projectId={pid} name={model.projectName} className="crumb-inp" onDone={() => setRenaming(null)} />
+                <span className="faint crumb-v">/ {title}</span>
+              </>
             ) : (
               <>
                 <span className="crumb-p">{model.projectName}</span>
+                <span className="faint crumb-v">/ {title}</span>
                 {model.projectName !== null && (
                   <button type="button" className="link crumb-act" data-testid="top-rename" onClick={() => setRenaming(pid)}>
                     {t('pj.rename')}
@@ -45,7 +49,6 @@ export function Topbar() {
                 )}
               </>
             )}
-            <span className="faint">/ {title}</span>
           </>
         ) : (
           <span className="crumb-p">{title}</span>
