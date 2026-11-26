@@ -629,6 +629,7 @@
   "ask.xt.action": "行动",
   "ask.from": "来自 {title}",
   "ask.accept": "接受",
+  "ask.alreadyDone": "后续消息里已完成，接受后记为已完成",
   "ask.due": "截止",
   "ask.dueClear": "清除",
   "ask.ignore": "忽略",

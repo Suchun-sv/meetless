@@ -629,6 +629,7 @@
   "ask.xt.action": "Action",
   "ask.from": "From {title}",
   "ask.accept": "Accept",
+  "ask.alreadyDone": "Done later in the thread; accepting records it as done",
   "ask.due": "Due",
   "ask.dueClear": "Clear",
   "ask.ignore": "Ignore",

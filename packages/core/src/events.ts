@@ -37,6 +37,8 @@ export interface ExtractInput {
   conflict?: boolean;
   /** YYYY-MM-DD: when the text says the item is due. */
   due?: IsoDate | null;
+  /** Already done later in the thread. */
+  met?: boolean;
 }
 
 /**

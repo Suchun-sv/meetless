@@ -43,6 +43,11 @@ export function ExtractItem({ item, projectId, onDone }: { item: ExtractEntry; p
       </div>
       <div className="small faint">{t('ask.from', { title: input.title })}</div>
       <div className="q-t">{x.text}</div>
+      {x.met && (
+        <div className="small tone-success" data-testid="x-met">
+          {t('ask.alreadyDone')}
+        </div>
+      )}
       {x.type === 'rev' && x.needId && (
         <div className="row gap6">
           <NeedChip projectId={projectId} needId={x.needId} />
