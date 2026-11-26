@@ -1,6 +1,6 @@
-import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, net, powerMonitor, session, shell } from 'electron';
 import { isWebUrl } from '@meetless/core';
 import { BRIDGE_METHODS, ClientNode, createFileLog, type BridgeEvent, type BridgeMethod, type FileLog, type MeetlessBridge } from '@meetless/client';
@@ -136,9 +136,13 @@ function runApp(): void {
   let rendererFile = join(__dirname, '../renderer/index.html');
 
   async function createWindow(): Promise<void> {
+    // After a silent hot-update relaunch: the window where it was, on the route it showed.
+    const back = restore;
+    restore = null;
     win = new BrowserWindow({
       width: 1440,
       height: 900,
+      ...(back?.bounds ?? {}),
       minWidth: 960,
       minHeight: 600,
       title: 'Meetless',
@@ -180,7 +184,8 @@ function runApp(): void {
     win.webContents.on('render-process-gone', (_e, d) => logError('renderer gone', d));
     log('window created', { inactive: INACTIVE });
     if (rendererUrl) await win.loadURL(rendererUrl);
-    else await win.loadFile(rendererFile);
+    else await win.loadFile(rendererFile, back?.route ? { query: { route: JSON.stringify(back.route) } } : undefined);
+    if (back?.minimized) win.minimize();
   }
 
   app.setAboutPanelOptions({
@@ -242,6 +247,18 @@ function runApp(): void {
     }
   };
   const runningBuild = readJson<BuildInfo>(join(__dirname, '../build.json'));
+  const relaunchFile = join(app.getPath('userData'), 'hot', 'relaunch.json');
+  let restore = readJson<{ bounds?: Electron.Rectangle; minimized?: boolean; route?: unknown }>(relaunchFile);
+  rmSync(relaunchFile, { force: true });
+  /** Whether the renderer is in the middle of something (App.tsx `__meetlessBusy`); busy when it cannot say. */
+  const rendererBusy = async (w: BrowserWindow) => (await w.webContents.executeJavaScript('Boolean(window.__meetlessBusy && window.__meetlessBusy())', true).catch(() => true)) as boolean;
+  const rendererRoute = async (w: BrowserWindow) => {
+    try {
+      return JSON.parse((await w.webContents.executeJavaScript('JSON.stringify(window.__meetlessRoute ? window.__meetlessRoute() : null)', true)) as string) as unknown;
+    } catch {
+      return null;
+    }
+  };
   const installedShell = readJson<Shell>(join(app.getAppPath(), 'dist', 'shell.json'));
   const runningHot = (globalThis as { __meetlessHot?: { commit: string } }).__meetlessHot?.commit ?? null;
   const pushUpdate = () => {
@@ -260,25 +277,50 @@ function runApp(): void {
     onChange: (s) => {
       pushUpdate();
       if (s.pending?.apply === 'reload') reloadWhenIdle(s.pending.commit);
+      if (s.pending?.apply === 'restart') relaunchWhenAway();
     },
   });
   const hotInfo = () => {
     const s = hot.state;
     return { commit: (s.running ?? runningBuild?.commit ?? '').slice(0, 7) || null, restart: s.pending?.apply === 'restart' };
   };
-  // A renderer-only update: reload into it once nobody has touched the machine for a minute.
+  // A renderer-only update: reload into it, on the same route, once nobody has touched the machine
+  // for a minute and nothing is being typed, uploaded or edited.
   let idleTimer: NodeJS.Timeout | null = null;
   const reloadWhenIdle = (commit: string) => {
     if (idleTimer) clearInterval(idleTimer);
-    idleTimer = setInterval(() => {
-      if (!win || powerMonitor.getSystemIdleTime() < 60) return;
+    idleTimer = setInterval(async () => {
+      const w = win;
+      if (!w || powerMonitor.getSystemIdleTime() < 60 || (await rendererBusy(w))) return;
       clearInterval(idleTimer!);
       idleTimer = null;
+      const route = await rendererRoute(w);
       rendererFile = hot.rendererOf(commit);
       log('hot reload', { commit: commit.slice(0, 7) });
-      void win.loadFile(rendererFile, { query: { updated: commit.slice(0, 7) } }).then(() => hot.applied(commit));
+      void w.loadFile(rendererFile, route ? { query: { route: JSON.stringify(route) } } : undefined).then(() => hot.applied(commit));
     }, 15_000);
     idleTimer.unref?.();
+  };
+  // An update to main or preload runs at the next start anyway. It also relaunches silently, but
+  // only after ten idle minutes, with no window in front (or it hidden or minimised) and nothing in
+  // progress; the window comes back with the same bounds and route.
+  let awayTimer: NodeJS.Timeout | null = null;
+  const relaunchWhenAway = () => {
+    if (awayTimer) return;
+    awayTimer = setInterval(async () => {
+      const w = win;
+      if (!w || w.isDestroyed() || powerMonitor.getSystemIdleTime() < 600) return;
+      const away = BrowserWindow.getFocusedWindow() === null || w.isMinimized() || !w.isVisible();
+      if (!away || (await rendererBusy(w))) return;
+      clearInterval(awayTimer!);
+      awayTimer = null;
+      mkdirSync(dirname(relaunchFile), { recursive: true });
+      writeFileSync(relaunchFile, JSON.stringify({ bounds: w.getNormalBounds(), minimized: w.isMinimized() || !w.isVisible(), route: await rendererRoute(w) }));
+      log('hot relaunch', { commit: hot.state.pending?.commit.slice(0, 7) ?? '' });
+      app.relaunch();
+      app.quit();
+    }, 60_000);
+    awayTimer.unref?.();
   };
 
   const updater = new ReleaseUpdater({
@@ -325,15 +367,8 @@ function runApp(): void {
       },
       updates: {
         check: async () => ({ ...(await updater.check()), hot: hotInfo() }),
-        // With no full release on offer, the click restarts into a hot update that needs it.
-        install: async () => {
-          if (!updater.current.available && hot.state.pending?.apply === 'restart') {
-            app.relaunch();
-            setTimeout(() => app.quit(), 300);
-            return { ok: true };
-          }
-          return updater.install();
-        },
+        // Only full releases are installed on a click; hot updates apply on their own.
+        install: () => updater.install(),
       },
     });
     log('client opened', { session: (await node.snapshot()).session !== null });

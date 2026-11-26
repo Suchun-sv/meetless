@@ -17,7 +17,7 @@ import {
 import { newId } from '../model/ids';
 import { safeReplay, type Replayed } from '../model/state';
 import type { Overlay } from './overlays';
-import { defaultRoute, DRAWER_VIEWS, type Route } from './routes';
+import { defaultRoute, DRAWER_VIEWS, restoredRoute, type Route } from './routes';
 
 /* The renderer's app context (contract §8). `Overlay` lives in app/overlays.tsx; re-exported here. */
 export type { Overlay } from './overlays';
@@ -101,7 +101,11 @@ const EMPTY: ClientSnapshot = {
 export function AppProvider({ bridge, children }: { bridge: MeetlessBridge; children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<ClientSnapshot | null>(null);
   const [replayed, setReplayed] = useState<Replayed>(() => safeReplay([]));
-  const [route, setRoute] = useState<Route>(defaultRoute);
+  const [route, setRoute] = useState<Route>(restoredRoute);
+  // Main reads the route before a silent hot-update relaunch or reload, to come back to it.
+  useEffect(() => {
+    (window as { __meetlessRoute?: () => Route }).__meetlessRoute = () => route;
+  }, [route]);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const noticeId = useRef(0);

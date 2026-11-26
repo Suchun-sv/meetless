@@ -36,6 +36,29 @@ export function defaultRoute(): Route {
   return { view: 'home' };
 }
 
+/**
+ * The route the window was on before a silent hot-update relaunch or reload (main passes it as the
+ * `route` query), when it is a well-formed one; otherwise `defaultRoute()`.
+ */
+export function restoredRoute(): Route {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('route');
+    if (!raw) return defaultRoute();
+    const r = JSON.parse(raw) as Record<string, unknown>;
+    if ((GLOBAL_VIEWS as readonly unknown[]).includes(r.view)) return { view: r.view as GlobalView };
+    if ((PROJECT_VIEWS as readonly unknown[]).includes(r.view) && typeof r.projectId === 'string') {
+      const out: Route = { view: r.view as ProjectView, projectId: r.projectId };
+      if (typeof r.needId === 'string') out.needId = r.needId;
+      if (typeof r.focusId === 'string') out.focusId = r.focusId;
+      if (typeof r.round === 'number') out.round = r.round;
+      return out;
+    }
+  } catch {
+    // not a route: start at home
+  }
+  return defaultRoute();
+}
+
 /** Where a material citation of an answer (U1's chips) opens: the input at its paragraph, or the artifact at its version and page. */
 export function materialRoute(m: Pick<MaterialCite, 'kind' | 'id' | 'projectId' | 'versionId' | 'page' | 'paraId'>): Route {
   return {

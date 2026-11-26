@@ -1,14 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { MeetlessBridge } from '@meetless/client/bridge';
 import { AppProvider, useApp } from './app/AppContext';
 import { SignIn } from './setup/SignIn';
 import { Shell } from './shell/Shell';
 import './setup/setup.css';
 
+/** Bridge calls that mean work is in flight (an upload, a capture, an import): no silent relaunch meanwhile. */
+const BUSY_CALLS: ReadonlySet<string> = new Set(['uploadBlob', 'captureRun', 'captureBindRepo', 'overleafSync', 'notionPage', 'api', 'submit']);
+let inFlight = 0;
+
+function tracked(bridge: MeetlessBridge): MeetlessBridge {
+  return new Proxy(bridge, {
+    get(target, key, recv) {
+      const v = Reflect.get(target, key, recv) as unknown;
+      if (typeof v !== 'function') return v;
+      if (!BUSY_CALLS.has(String(key))) return v.bind(target);
+      return (...args: unknown[]) => {
+        inFlight++;
+        return Promise.resolve((v as (...a: unknown[]) => unknown).apply(target, args)).finally(() => inFlight--);
+      };
+    },
+  });
+}
+
+/**
+ * Whether the user is in the middle of something main must not interrupt with a silent hot-update
+ * relaunch or reload: a call in flight, an open dialog, a field being typed in, or any unsent text.
+ */
+(window as { __meetlessBusy?: () => boolean }).__meetlessBusy = () => {
+  if (inFlight > 0 || document.querySelector('.modal')) return true;
+  const active = document.activeElement;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || (active as HTMLElement).isContentEditable)) return true;
+  return [...document.querySelectorAll('textarea')].some((el) => el.value.trim() !== '');
+};
+
 export function App({ bridge }: { bridge: MeetlessBridge | null }) {
-  if (!bridge) return <NoBridge />;
+  const watched = useMemo(() => (bridge ? tracked(bridge) : null), [bridge]);
+  if (!watched) return <NoBridge />;
   return (
-    <AppProvider bridge={bridge}>
+    <AppProvider bridge={watched}>
       <Root />
     </AppProvider>
   );
