@@ -1,4 +1,4 @@
-import { projectInputs, projectNeeds, projectRounds, type Id, type Input, type IsoDate, type Need, type Requester, type Round, type Scene, type State } from '@meetless/core';
+import { projectInputs, projectNeeds, projectRounds, type Id, type Input, type IsoDate, type Need, type Requester, type Round, type Scene, type SourceKind, type State } from '@meetless/core';
 
 /*
  * The Lineage tab as a time flow of where needs came from (no React, no i18n): sections by round,
@@ -68,6 +68,9 @@ export function firstMeaningful(paras: readonly string[], title = ''): string | 
   return null;
 }
 
+/** The scene a need's own source kind reads as, for needs with no input behind them. */
+const SRC_TYPE: Partial<Record<SourceKind, NodeType>> = { meeting: 'meeting', mail: 'mail', chat: 'chat', doc: 'doc', file: 'doc', commit: 'doc', exp: 'doc' };
+
 /** A need shown under its parent ("衍生") rather than on its own. */
 const nested = (s: State, n: Need) => n.parentId !== null && s.needs[n.parentId] !== undefined;
 
@@ -132,12 +135,35 @@ export function flowNodes(s: State, projectId: Id): FlowNode[] {
       seq: p.seq,
     });
   }
-  // Needs added by hand (no input, proposal or delivery behind them): one node per day.
+  // Needs with no input behind them but a named source (「ICML 2027 审稿邀请邮件」): one scene per
+  // (kind, source, day), or the project's input of that title when there is one, so its summary and
+  // original text apply. Only needs with no source name stay as 「手动添加」, one node per day.
+  const inputByTitle = new Map<string, FlowNode>();
+  for (const node of nodes) if (node.key.startsWith('in:')) inputByTitle.set(node.title.trim(), node);
+  const named = new Map<string, FlowNode>();
   const manual = new Map<IsoDate, Need[]>();
   for (const n of needs) {
     if (n.source.inputId || n.source.proposalId || n.fromRoundId || nested(s, n)) continue;
+    const ref = n.source.ref.trim();
+    if (ref && n.source.src !== 'agent') {
+      const own = inputByTitle.get(ref);
+      if (own) {
+        own.items.push({ kind: 'need', needId: n.id });
+        continue;
+      }
+      const key = `src:${n.source.src}|${ref}|${n.source.date}`;
+      const node =
+        named.get(key) ??
+        ({ key, type: SRC_TYPE[n.source.src] ?? 'doc', date: n.source.date, from: n.requester, title: ref, items: [], original: [], gist: null, ai: false, seq: n.createdSeq } satisfies FlowNode);
+      node.items.push({ kind: 'need', needId: n.id });
+      node.original.push(n.source.quote);
+      node.seq = Math.max(node.seq, n.createdSeq);
+      named.set(key, node);
+      continue;
+    }
     manual.set(n.source.date, [...(manual.get(n.source.date) ?? []), n]);
   }
+  for (const node of named.values()) nodes.push({ ...node, gist: firstMeaningful(node.original) });
   for (const [date, ns] of manual) {
     nodes.push({
       key: `mn:${date}`,
