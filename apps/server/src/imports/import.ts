@@ -85,7 +85,7 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
   const view = deps.service.view(p.userId);
   const needs = isPrivate ? projectNeeds(view, req.projectId) : projectNeeds(shareableView(view), req.projectId);
   const byModel = deps.ai?.enabled ? await deps.ai.extract(p.userId, text, needs, paras) : null;
-  const extracts = byModel ?? detectExtracts(paras, needs, 8, lead);
+  const extracts = byModel?.items ?? detectExtracts(paras, needs, 8, lead);
   const detector = byModel ? `deepseek/${deps.ai!.model}` : DETECTOR_ID;
 
   await deps.service.submit(p.userId, {
@@ -103,6 +103,7 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
       extracts,
       detector,
       scene: detectScene(text, (sceneHint as Scene | null) ?? 'doc'),
+      ...(byModel?.summary ? { summary: byModel.summary } : {}),
       private: isPrivate,
     },
   });

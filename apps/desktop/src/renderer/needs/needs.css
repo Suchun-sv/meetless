@@ -164,3 +164,10 @@
   .lin-tick::after{top:calc(var(--space-5) + 8px);right:calc(var(--space-2) * -1)}
   .lin-today .lin-date{grid-area:1/2}
 }
+
+.lin-gist{font-size:var(--text-sm);color:var(--color-text-secondary);line-height:var(--leading-normal);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+/* 「回到今天」: shown while today is scrolled away, kept in view at the bottom of the lineage. */
+.lin-back{position:sticky;bottom:var(--space-4);margin:var(--space-3) auto 0;display:flex;width:max-content;background:var(--color-bg);box-shadow:var(--shadow-sm);z-index:2}
+/* Room below the last entry, so today can sit in the upper third even with few upcoming DDLs. */
+.lin-line{padding-bottom:45vh}
+.lin-line::before{bottom:45vh}

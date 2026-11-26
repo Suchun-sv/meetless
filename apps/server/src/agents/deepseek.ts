@@ -257,7 +257,8 @@ const CLASSIFY_PROMPT = [
 
 const EXTRACT_PROMPT = [
   'You extract work items from a message a team member gave a requirements tool.',
-  'Return JSON only, in this shape: {"items":[{"type":"new","text":"..."}]}.',
+  'Return JSON only, in this shape: {"summary":"...","items":[{"type":"new","text":"..."}]}.',
+  'summary says what the message is about in one line, in its language: at most 60 Chinese characters or 120 English characters, no dot symbols.',
   'type is one of: new (a new requirement or task), hyp (a hypothesis to test), rev (a change to an existing need; then also give "needCode" from the list), action (a deadline or follow-up that is not a need).',
   'One item per distinct thing: split numbered and ;-separated lists into separate items.',
   'text is short, in the language of the message, without numbering, bullets or dot symbols such as · or •.',
@@ -266,6 +267,21 @@ const EXTRACT_PROMPT = [
 ].join('\n');
 
 const TYPES = new Set(['new', 'hyp', 'rev', 'action']);
+
+/** The model's one-line summary, cleaned: dots out, one line, at most 60 CJK or 120 other characters. */
+export function parseSummary(raw: string): string | null {
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const s = (body as { summary?: unknown } | null)?.summary;
+  if (typeof s !== 'string') return null;
+  const line = oneLine(noDots(s));
+  if (!line) return null;
+  return clipTo(line, /\p{Script=Han}/u.test(line) ? 60 : 120);
+}
 
 /**
  * The model's JSON as extracts, strictly: an `items` list of known types with non-empty text
@@ -429,7 +445,7 @@ export class ProjectAi {
    * Extracts from `text` with the model: validated items, or null (not configured, failed, or
    * nothing usable) so the caller uses the rule detector. `needs` are the needs a revision may name.
    */
-  async extract(userId: Id, text: string, needs: Need[], paras: Paragraph[]): Promise<ExtractInput[] | null> {
+  async extract(userId: Id, text: string, needs: Need[], paras: Paragraph[]): Promise<{ items: ExtractInput[]; summary: string | null } | null> {
     if (!this.cfg || [...text].length > MAX_EXTRACT_CHARS) return null;
     const list = needs.slice(0, 40).map((n) => `${n.code} ${oneLine(n.title)}`).join('\n') || '(none)';
     const out = await this.run(userId, 'extract', [{ role: 'system', content: EXTRACT_PROMPT }, { role: 'user', content: `Existing needs:\n${list}\n\nMessage:\n${text}` }], {
@@ -439,7 +455,7 @@ export class ProjectAi {
     });
     if (!out.ok) return null;
     const items = parseExtracts(out.text, needs, paras);
-    return items && items.length > 0 ? items : null;
+    return items && items.length > 0 ? { items, summary: parseSummary(out.text) } : null;
   }
 
   get model(): string | null {

@@ -232,6 +232,8 @@ export interface Input {
   kind: InputKind;
   /** Set on import (detected from the text) and changeable later (`input.scene_set`); null for inputs from before it existed. */
   scene: Scene | null;
+  /** A one-line summary written on import when AI is on; null otherwise (the lineage shows the first paragraph then). */
+  summary: string | null;
   title: string;
   from: Requester | null;
   date: IsoDate;

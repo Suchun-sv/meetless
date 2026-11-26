@@ -237,6 +237,7 @@
   "lin.title": "Lineage",
   "lin.feedback": "Feedback",
   "lin.direct": "Raised directly",
+  "lin.backToday": "Back to today",
   "lin.ddl": "DDL {title} {d}",
   "lin.original": "Original text",
   "lin.derived": "Derived",

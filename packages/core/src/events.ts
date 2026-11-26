@@ -123,6 +123,8 @@ export interface EventPayloads {
     private?: boolean;
     /** Detected from the text on import (`detectScene`). */
     scene?: Scene;
+    /** A short summary of the input (DeepSeek, on import), at most 200 characters, no dot symbols. */
+    summary?: string;
   };
   'input.shared': { inputId: Id; snapshot?: { input: Input } };
   /** The input's scene, changed by hand. */

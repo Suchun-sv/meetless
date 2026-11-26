@@ -654,6 +654,7 @@ const handlers: Handlers = {
       projectId: p.projectId,
       kind: p.kind,
       scene: p.scene === undefined ? null : sceneOf(p.scene),
+      summary: typeof p.summary === 'string' && p.summary.trim() ? [...noDots(p.summary).trim()].slice(0, 200).join('') : null,
       title: text(p.title, 'title'),
       from: requesterOf(s, p.from),
       date: date(p.date, 'date'),

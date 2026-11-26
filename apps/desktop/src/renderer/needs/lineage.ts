@@ -38,6 +38,8 @@ export interface FlowNode {
   items: FlowItem[];
   /** What clicking the node shows: the input's paragraphs, or the delivery's notes. */
   original: string[];
+  /** What tells this source apart, under its title: a summary, else its first meaningful paragraph. */
+  gist: string | null;
   /** Produced by AI: an agent proposal, or extracts DeepSeek found. */
   ai: boolean;
   seq: number;
@@ -52,6 +54,18 @@ export interface FlowSection {
 export function sceneOf(i: Input): Scene {
   if (i.scene) return i.scene;
   return i.kind === 'md' ? 'meeting' : i.kind === 'txt' ? 'chat' : 'doc';
+}
+
+const HEADER = /^(发件人|收件人|抄送|主题|发送时间|日期|from|to|cc|subject|date|sent)\s*[:：]/i;
+
+/** The first paragraph that says something: not a mail header, not the title again, not a stub. */
+export function firstMeaningful(paras: readonly string[], title = ''): string | null {
+  for (const p of paras) {
+    const t = p.trim();
+    if ([...t].length < 6 || HEADER.test(t) || t === title.trim()) continue;
+    return t;
+  }
+  return null;
 }
 
 /** A need shown under its parent ("衍生") rather than on its own. */
@@ -76,6 +90,7 @@ function inputNode(s: State, i: Input): FlowNode {
     title: i.title,
     items,
     original: i.body.map((p) => p.text),
+    gist: i.summary ?? firstMeaningful(i.body.map((p) => p.text), i.title),
     ai: i.detector.startsWith('deepseek'),
     seq: i.seq,
   };
@@ -96,6 +111,7 @@ export function flowNodes(s: State, projectId: Id): FlowNode[] {
       title: r.title,
       items: fed.map((n) => ({ kind: 'need', needId: n.id })),
       original: [...r.delivery.items, ...fed.map((n) => n.source.quote)],
+      gist: firstMeaningful([...r.delivery.items, ...fed.map((n) => n.source.quote)]),
       ai: false,
       seq: r.delivery.seq,
     });
@@ -111,6 +127,7 @@ export function flowNodes(s: State, projectId: Id): FlowNode[] {
       title: p.title,
       items: need ? (nested(s, need) ? [] : [{ kind: 'need', needId: need.id }]) : [{ kind: 'pending', type: p.kind === 'hyp' ? 'hyp' : 'new', text: p.title }],
       original: [p.why ?? p.accept ?? p.expect ?? p.title],
+      gist: p.why ?? null,
       ai: true,
       seq: p.seq,
     });
@@ -130,6 +147,7 @@ export function flowNodes(s: State, projectId: Id): FlowNode[] {
       title: '',
       items: ns.map((n) => ({ kind: 'need', needId: n.id })),
       original: ns.map((n) => n.source.quote),
+      gist: null,
       ai: false,
       seq: Math.max(...ns.map((n) => n.createdSeq)),
     });
@@ -166,15 +184,15 @@ export function flowSections(s: State, projectId: Id, filter: FlowFilter = 'all'
 export type FlowEntry = { kind: 'node'; date: IsoDate; node: FlowNode } | { kind: 'ddl'; date: IsoDate; round: Round } | { kind: 'today'; date: IsoDate };
 
 /**
- * The lineage as one line, newest first: the sources (filtered), each DDL's due date, and today.
- * A source with no date (an open agent proposal) counts as today. On the same day a DDL comes
- * first, then today, then the sources.
+ * The lineage as one line, oldest first so it reads downward in time: the sources (filtered), each
+ * DDL's due date, and today (future DDLs below it). A source with no date (an open agent proposal)
+ * counts as today. On one day the sources come first, then today, then the DDL (due at day's end).
  */
 export function flowTimeline(s: State, projectId: Id, filter: FlowFilter, today: IsoDate): FlowEntry[] {
   const out: FlowEntry[] = [];
   for (const node of flowNodes(s, projectId)) if (inFilter(filter, node.type)) out.push({ kind: 'node', date: node.date ?? today, node });
   for (const r of projectRounds(s, projectId)) out.push({ kind: 'ddl', date: r.due, round: r });
   out.push({ kind: 'today', date: today });
-  const order = { ddl: 0, today: 1, node: 2 } as const;
-  return out.sort((a, b) => b.date.localeCompare(a.date) || order[a.kind] - order[b.kind] || (a.kind === 'node' && b.kind === 'node' ? b.node.seq - a.node.seq : 0));
+  const order = { node: 0, today: 1, ddl: 2 } as const;
+  return out.sort((a, b) => a.date.localeCompare(b.date) || order[a.kind] - order[b.kind] || (a.kind === 'node' && b.kind === 'node' ? a.node.seq - b.node.seq : 0));
 }

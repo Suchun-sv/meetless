@@ -237,6 +237,7 @@
   "lin.title": "需求脉络",
   "lin.feedback": "反馈",
   "lin.direct": "直接提出",
+  "lin.backToday": "回到今天",
   "lin.ddl": "截止 {title} {d}",
   "lin.original": "原文",
   "lin.derived": "衍生",

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SEP, type Id } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
@@ -106,6 +106,7 @@ function Scene({ projectId, node }: { projectId: Id; node: FlowNode }) {
           {node.ai && node.type !== 'proposal' && <Pill tone="ai">{t('ai.deepseek')}</Pill>}
           {node.title && <strong className="lin-node-t">{node.title}</strong>}
         </span>
+        {node.gist && <span className="lin-gist">{node.gist}</span>}
         <span className="lin-card-m small faint">
           {[who, t('lin.made', { n: node.items.length })].filter(Boolean).join(SEP)}
           {!open && node.items.length > 0 && <span className="lin-prev">{SEP + preview(live, node.items[0])}</span>}
@@ -135,7 +136,7 @@ function Scene({ projectId, node }: { projectId: Id; node: FlowNode }) {
 }
 
 /**
- * The Lineage tab as a vertical timeline, newest at the top: a line on the left, each source a card
+ * The Lineage tab as a vertical timeline, oldest at the top, opened at today: a line on the left, each source a card
  * attached to it by a short tick with its date on the left; DDL due dates as diamonds on the line,
  * and today as a short labelled rule across it. A type filter on top.
  */
@@ -144,6 +145,28 @@ export function Lineage({ projectId }: { projectId: Id }) {
   const [filter, setFilter] = useState<FlowFilter>('all');
   const entries = flowTimeline(live, projectId, filter, today);
   const sources = entries.some((e) => e.kind === 'node');
+  const todayRef = useRef<HTMLLIElement | null>(null);
+  const [away, setAway] = useState(false);
+  // Today in the upper third of the scroller: on open, and on 「回到今天」.
+  const toToday = (smooth: boolean) => {
+    const el = todayRef.current;
+    if (!el) return;
+    let sc: HTMLElement | null = el.parentElement;
+    while (sc && !(sc.scrollHeight > sc.clientHeight && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    const box = sc ?? document.scrollingElement;
+    if (!box) return;
+    const top = el.getBoundingClientRect().top - (sc ? sc.getBoundingClientRect().top : 0);
+    box.scrollTo({ top: box.scrollTop + top - box.clientHeight / 3, behavior: smooth ? 'smooth' : 'auto' });
+  };
+  useEffect(() => {
+    toToday(false);
+    const el = todayRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setAway(!e?.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, filter]);
   return (
     <div className="lineage" data-testid="lineage">
       <div className="lin-top">
@@ -160,7 +183,7 @@ export function Lineage({ projectId }: { projectId: Id }) {
       <ol className="lin-line">
         {entries.map((e) =>
           e.kind === 'today' ? (
-            <li key="today" className="lin-e lin-today" data-testid="lin-today">
+            <li key="today" ref={todayRef} className="lin-e lin-today" data-testid="lin-today">
               <span className="lin-date">{t('tl.today')}</span>
               <span className="lin-rail" />
             </li>
@@ -181,6 +204,11 @@ export function Lineage({ projectId }: { projectId: Id }) {
           ),
         )}
       </ol>
+      {away && (
+        <button type="button" className="chip lin-back" data-testid="lin-back" onClick={() => toToday(true)}>
+          {t('lin.backToday')}
+        </button>
+      )}
     </div>
   );
 }
