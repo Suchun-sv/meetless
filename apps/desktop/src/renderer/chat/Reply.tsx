@@ -227,7 +227,9 @@ export function Reply({ reply, scope, messageId }: ReplyProps) {
       const acceptAll = () => {
         if (!input) return Promise.resolve(false);
         const made = new Map<string, string>();
-        return runCmds(bulk.flatMap((x) => acceptCommands(live, input, x, newId('n'), today, x.due ?? null, made)), submit);
+        // Parents first, so a hypothesis accepted in the same batch hangs under its need.
+        const ordered = [...bulk].sort((a, b) => Number(!!a.parent && bulk.some((y) => y.id === a.parent)) - Number(!!b.parent && bulk.some((y) => y.id === b.parent)));
+        return runCmds(ordered.flatMap((x) => acceptCommands(live, input, x, newId('n'), today, x.due ?? null, made)), submit);
       };
       return (
         <>

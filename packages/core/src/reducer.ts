@@ -217,6 +217,21 @@ function checkSource(s: State, v: NeedSource, projectId: Id, actorId: Id, privat
   };
 }
 
+/**
+ * The parent a need accepted from extract `x` gets: the need its parent extract became (once that
+ * one is accepted), or the existing need it names. None when that need is gone, not visible, or
+ * private while the new need would be shared.
+ */
+function extractParent(s: State, input: Input, x: Extract, actorId: Id): Id | null {
+  if (!x.parent) return null;
+  const sib = input.extracts.find((y) => y.id === x.parent);
+  const id = sib ? sib.resultNeedId : x.parent;
+  const n = id ? s.needs[id] : undefined;
+  if (!n || n.projectId !== input.projectId) return null;
+  if (n.privateTo !== null && (n.privateTo !== actorId || input.privateTo === null)) return null;
+  return n.id;
+}
+
 function checkParent(s: State, projectId: Id, parentId: Id | null | undefined, actorId: Id, privateTo: Id | null): Id | null {
   if (parentId === null || parentId === undefined) return null;
   const p = visible(s.needs, parentId, 'need', actorId);
@@ -329,6 +344,13 @@ function checkExtracts(s: State, projectId: Id, body: { id: Id }[], xs: ExtractI
       conflict: x.type === 'rev' && x.conflict === true,
       due: x.due == null ? null : date(x.due, 'due'),
       met: x.met === true && (x.type === 'new' || x.type === 'hyp'),
+      // Another extract of this input, or a need of this project the importer can see; anything else is dropped.
+      parent:
+        typeof x.parent === 'string' && x.parent !== x.id && (x.type === 'new' || x.type === 'hyp')
+          ? xs.some((y) => y.id === x.parent) || (s.needs[x.parent]?.projectId === projectId && (s.needs[x.parent]!.privateTo === null || s.needs[x.parent]!.privateTo === actorId))
+            ? x.parent
+            : null
+          : null,
       state: null,
       decidedBy: null,
       resultNeedId: null,
@@ -722,7 +744,7 @@ const handlers: Handlers = {
         title: x.text,
         status: kind === 'ext' ? (x.met ? 'met' : 'todo') : x.met ? 'held' : 'untested',
         roundId,
-        parentId: null,
+        parentId: extractParent(s, input, x, e.actorId),
         fromRoundId: null,
         ownerId: null,
         requester: kind === 'ext' ? input.from : null,

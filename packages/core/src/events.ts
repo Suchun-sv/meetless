@@ -39,6 +39,8 @@ export interface ExtractInput {
   due?: IsoDate | null;
   /** Already done later in the thread. */
   met?: boolean;
+  /** Its parent: an extract id of the same input, or an existing need id. */
+  parent?: Id | null;
 }
 
 /**

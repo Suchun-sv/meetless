@@ -220,6 +220,8 @@ export interface Extract {
   due: IsoDate | null;
   /** A later message in the same thread already did it: accepting creates the need already met (held, for a hypothesis). */
   met: boolean;
+  /** What the item hangs under: another extract of the same input (x1) or an existing need id. Accepting sets the need's parent. */
+  parent: Id | null;
   state: ExtractState | null;
   decidedBy: Id | null;
   /** Need created or revised by accepting. */

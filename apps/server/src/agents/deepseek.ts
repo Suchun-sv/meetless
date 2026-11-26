@@ -261,17 +261,19 @@ const EXTRACT_PROMPT = [
   'Return JSON only, in this shape: {"summary":"...","items":[{"type":"new","text":"...","due":"YYYY-MM-DD","line":3,"done":false}]}. A hyp item may also give "expect" and "verify".',
   'Read the lines in time order, as one thread. A request that a later line already fulfils (accepted, answered, sent, done) is not open: leave it out, or give it with "done": true.',
   'The summary and the items must agree: never summarise something as done and list it as open, or the other way round.',
+  'Keep every person name exactly as written in the message, also inside a Chinese summary: "Yang Cao" stays "Yang Cao" (never 曹杨, 曹博士 or 曹老师); no added titles (no 博士, 老师, Dr.) and no translation. Add no fact that is not in the text (do not call something a special issue, a journal or a venue unless the text says so).',
+  'Existing needs are listed: anything that says the same thing as one of them is NOT a new or hyp item. Only a substantive change to it becomes a rev item (with its needCode).',
   'summary says what the message is about in one line, in its language: at most 60 Chinese characters or 120 English characters, no dot symbols.',
   'type is one of:',
   'new: anything someone must produce, finish or hand to someone (a deliverable), e.g. 完成采访回答, 提交初稿, 准备汇报 slides;',
-  'hyp: a hypothesis to test: any expected result with a reason, such as "X will/may perform better/worse than Y because ...", 「可能」, 「应该会」. Give one hyp per prediction, with the expected effect and the reason in "expect" (and how to test it in "verify" when stated).',
+  'hyp: a hypothesis to test: any expected result with a reason, such as "X will/may perform better/worse than Y because ...", 「可能」, 「应该会」. Give one hyp per prediction, with the expected effect and the reason in "expect" (and how to test it in "verify" when stated). Give it "parent": the number (1-based, in your items list) of the new item it is about, or the code of an existing need (N3) it is about.',
   'When a line describes something to do (a baseline, an experiment, an analysis) and also predicts its result, give BOTH: a new item for doing it (e.g. 实现并运行 Baseline 2：LA2M_MLP) and a hyp for the prediction (e.g. Baseline 2 优于 MLP 和 ISO，因为拟合精度更好). Never drop the new item because a hyp was given.',
   'rev: a change to an existing need; then also give "needCode" from the list;',
   'action: only a one-off chore with no output (book a room, send a reminder).',
   'Do not extract pleasantries, greetings, thanks, offers to help ("有问题随时交流"), or bare questions; they are not items.',
   'One item per distinct thing: split numbered and ;-separated lists into separate items. Merge what the conversation says about one deliverable (what it is, when it is due) into one item.',
   'text is short, in the language of the message, without numbering, bullets or dot symbols such as · or •.',
-  'due: only when the text explicitly states a time for the item, absolute (Feb 07, 2027) or relative (下周结束, 周五前). A date that only stamps a message is not a deadline. Give it as YYYY-MM-DD. Resolve relative words against the time of the line that says them, using the calendar given: 明天 is the next day; 周五前 is the coming Friday; 下周结束, 下周内 or 下周 is next week\'s Friday; 月底 is the last day of that month. When unsure, take the conservative (earlier) day. Leave due out when there is no deadline.',
+  'due: only when the text explicitly states a time for the item, absolute (Feb 07, 2027) or relative (下周结束, 周五前). An explicit date on the item\'s line (2027-01-14：摘要提交截止, 1月14日前) always gives its due. A date that only stamps a message (a name, a date and a time) is not a deadline. Give it as YYYY-MM-DD. Resolve relative words against the time of the line that says them, using the calendar given: 明天 is the next day; 周五前 is the coming Friday; 下周结束, 下周内 or 下周 is next week\'s Friday; 月底 is the last day of that month. When unsure, take the conservative (earlier) day. Leave due out when there is no deadline.',
   'line: the number of the line that carries the key information, the deadline when there is one, else the line that states the item.',
   'Leave due out (null) when no time is stated.',
   `At most ${MAX_EXTRACTS} items. If there is nothing to record, return {"items":[]}.`,
@@ -283,15 +285,47 @@ const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 const dayMs = (d: IsoDate) => Date.parse(`${d}T12:00:00Z`);
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/** Each line's own date: a date written on it (or on an earlier line), else the input's date; and its time when it carries one. */
+const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const MON = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
+
+/**
+ * Every explicit absolute date in a line (2027-01-14, 2027/1/14, 2027年1月14日, Jan 14, 2027,
+ * 14 Jan 2027, and 1月14日 with the year of its next occurrence on or after `ref`), each with
+ * whether it is a timestamp: a date followed by a time (「Yang Cao 2026/11/26 3:35」) stamps a
+ * message and is not a deadline.
+ */
+export function absoluteDates(line: string, ref: IsoDate): { date: IsoDate; stamp: boolean }[] {
+  const out: { date: IsoDate; stamp: boolean; at: number; end: number }[] = [];
+  const add = (y: number, m: number, d: number, at: number, end: number) => {
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (m < 1 || m > 12 || d < 1 || d > 31 || isoDay(dayMs(iso)) !== iso) return;
+    if (out.some((o) => at < o.end && end > o.at)) return;
+    out.push({ date: iso, stamp: /^\s*\d{1,2}:\d{2}/.test(line.slice(end)), at, end });
+  };
+  const each = (re: RegExp, f: (m: RegExpExecArray) => [number, number, number] | null) => {
+    for (const m of line.matchAll(re)) {
+      const v = f(m as RegExpExecArray);
+      if (v) add(v[0], v[1], v[2], m.index!, m.index! + m[0].length);
+    }
+  };
+  each(/(\d{4})年(\d{1,2})月(\d{1,2})[日号]?/g, (m) => [+m[1]!, +m[2]!, +m[3]!]);
+  each(/(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/g, (m) => [+m[1]!, +m[2]!, +m[3]!]);
+  each(new RegExp(`\\b${MON}\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`, 'gi'), (m) => [+m[3]!, MONTHS[m[1]!.toLowerCase()]!, +m[2]!]);
+  each(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON},?\\s+(\\d{4})\\b`, 'gi'), (m) => [+m[3]!, MONTHS[m[2]!.toLowerCase()]!, +m[1]!]);
+  each(/(?<![年\d])(\d{1,2})月(\d{1,2})[日号]/g, (m) => {
+    const [ry, rm, rd] = ref.split('-').map(Number) as [number, number, number];
+    const m1 = +m[1]!, d1 = +m[2]!;
+    return [m1 < rm || (m1 === rm && d1 < rd) ? ry + 1 : ry, m1, d1];
+  });
+  return out.sort((a, b) => a.at - b.at).map(({ date, stamp }) => ({ date, stamp }));
+}
+
+/** Each line's own date: a timestamp on it (a date followed by a time) or on an earlier line, else the input's date; and its time when it carries one. */
 export function lineTimes(paras: Paragraph[], date: IsoDate): { date: IsoDate; time: string | null }[] {
   let cur = date;
   return paras.map((p) => {
-    const d = /(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/.exec(p.text);
-    if (d) {
-      const iso = `${d[1]}-${d[2]!.padStart(2, '0')}-${d[3]!.padStart(2, '0')}`;
-      if (!Number.isNaN(dayMs(iso))) cur = iso;
-    }
+    const stamp = absoluteDates(p.text, cur).find((d) => d.stamp);
+    if (stamp) cur = stamp.date;
     const t = /(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?(?=\s*[:：]|\s|$)/.exec(p.text);
     return { date: cur, time: t ? `${t[1]!.padStart(2, '0')}:${t[2]}` : null };
   });
@@ -331,6 +365,31 @@ export function parseSummary(raw: string): string | null {
  * no repeats, at most 8. Each item points at the paragraph it shares the most words with.
  * Null when the JSON is not that shape at all.
  */
+/**
+ * How alike two item texts are: the Dice coefficient of their tokens (Latin words, Chinese
+ * bigrams, codes; core `tokenSet`). Measured on real items: rewordings of one need score 0.71 to
+ * 0.87, distinct items (another baseline, the prediction about it, abstract vs full paper) 0.13 to
+ * 0.33, and a short title inside a longer different item about 0.6; the threshold sits above that.
+ */
+export function similarity(a: string, b: string): number {
+  const x = tokenSet(a);
+  const y = tokenSet(b);
+  if (x.size === 0 || y.size === 0) return 0;
+  return (2 * overlap(x, y)) / (x.size + y.size);
+}
+/** At or above this, a new item is the same as an existing need (see `similarity`). */
+export const DEDUP_SIMILARITY = 0.65;
+/** A need title of at least 5 tokens, 85% of them inside the new text: the same item with more words around it. */
+export const DEDUP_CONTAINED = 0.85;
+
+/** Whether an item text restates need `n`: alike its title (or title and criteria), or containing its title. */
+export function sameAsNeed(text: string, n: Need): boolean {
+  if (similarity(text, n.title) >= DEDUP_SIMILARITY) return true;
+  if (similarity(text, `${n.title} ${n.accept ?? n.expect ?? ''}`) >= DEDUP_SIMILARITY) return true;
+  const title = tokenSet(n.title);
+  return title.size >= 5 && overlap(title, tokenSet(text)) / title.size >= DEDUP_CONTAINED;
+}
+
 /** Words that make a same-day date a real deadline. */
 const TODAY_WORDS = /今天|今晚|今日|当天|下班前|today|tonight|\beod\b|end of (the )?day|by close of business|\bcob\b/i;
 
@@ -346,13 +405,24 @@ export function parseExtracts(raw: string, needs: Need[], paras: Paragraph[], da
   if (!Array.isArray(items)) return null;
   const out: ExtractInput[] = [];
   const seen = new Set<string>();
+  const byIndex = new Map<number, string>();
+  const parents = new Map<string, unknown>();
   for (const it of items) {
     if (out.length >= MAX_EXTRACTS) break;
     if (!it || typeof it !== 'object') continue;
-    const { type, text, needCode, due, line, done, expect, verify } = it as Record<string, unknown>;
+    const { type, text, needCode, due, line, done, expect, verify, parent } = it as Record<string, unknown>;
+    const index = items.indexOf(it) + 1;
     if (typeof type !== 'string' || !TYPES.has(type) || typeof text !== 'string') continue;
     const clean = clipTo(oneLine(noDots(text)).replace(/^(?:[-*+•]\s*|[（(]?\d{1,2}[.、)）]\s*)/, ''), 160);
     if (!clean || seen.has(clean)) continue;
+    // The same thing as an existing need, reworded: not a new item. Its number now means that need.
+    if (type === 'new' || type === 'hyp') {
+      const same = needs.find((n) => sameAsNeed(clean, n));
+      if (same) {
+        byIndex.set(index, same.id);
+        continue;
+      }
+    }
     seen.add(clean);
     const id = `x${out.length + 1}`;
     const t = tokenSet(clean);
@@ -373,20 +443,36 @@ export function parseExtracts(raw: string, needs: Need[], paras: Paragraph[], da
       const from = date ? dayMs(date) : Date.now() - 400 * DAY_MS;
       if (dayMs(due) >= from - DAY_MS && dayMs(due) <= from + 400 * DAY_MS) dueDay = due;
     }
-    // A due date on the message's own day is a timestamp, not a deadline, unless the line says today.
+    const at = paraId ? paras.findIndex((p) => p.id === paraId) : -1;
+    // The dates written on the item's line that are not message timestamps.
+    const written = at >= 0 && times ? absoluteDates(paras[at]!.text, times[at]!.date).filter((d) => !d.stamp).map((d) => d.date) : [];
+    // A due date on the message's own day is a timestamp, not a deadline, unless the line says today or writes that date.
     if (dueDay && times) {
-      const at = paraId ? paras.findIndex((p) => p.id === paraId) : -1;
       const sameDay = at >= 0 ? times[at]!.date === dueDay : times.some((x) => x.date === dueDay);
       const lines = at >= 0 ? [paras[at]!.text] : paras.filter((_, i) => times[i]!.date === dueDay).map((p) => p.text);
-      if (sameDay && !lines.some((l) => TODAY_WORDS.test(l))) dueDay = null;
+      if (sameDay && !lines.some((l) => TODAY_WORDS.test(l)) && !written.includes(dueDay)) dueDay = null;
+    }
+    // Backstop: the model gave no date, but the item's line writes exactly one (not a timestamp).
+    if (!dueDay && new Set(written).size === 1) {
+      const only = written[0]!;
+      if (!date || dayMs(only) >= dayMs(date) - DAY_MS) dueDay = only;
     }
     const met = done === true;
+    byIndex.set(index, id);
+    if (type === 'hyp') parents.set(id, parent);
     const str = (v: unknown) => (typeof v === 'string' && v.trim() ? clipTo(oneLine(noDots(v)), 300) : null);
     const target = type === 'rev' && typeof needCode === 'string' ? needs.find((n) => n.code === needCode.trim()) : undefined;
     if (target) out.push({ id, type: 'rev', text: clean, paraId, needId: target.id, conflict: false, due: dueDay });
     else if (type === 'hyp') out.push({ id, type: 'hyp', text: clean, paraId, expect: str(expect) ?? clean, verify: str(verify), due: dueDay, ...(met ? { met } : {}) });
     else if (type === 'action') out.push({ id, type: 'action', text: clean, paraId, due: dueDay });
     else out.push({ id, type: 'new', text: clean, paraId, accept: null, due: dueDay, ...(met ? { met } : {}) });
+  }
+  // A hypothesis hangs under the item it is about: its number in the list (now an extract id, or the
+  // existing need it duplicated), or an existing need's code.
+  for (const x of out) {
+    const p = parents.get(x.id);
+    const ref = typeof p === 'number' ? byIndex.get(p) : typeof p === 'string' && /^\d+$/.test(p.trim()) ? byIndex.get(Number(p)) : typeof p === 'string' ? needs.find((n) => n.code === p.trim())?.id : undefined;
+    if (ref && ref !== x.id) x.parent = ref;
   }
   return out;
 }
@@ -523,7 +609,9 @@ export class ProjectAi {
     });
     if (!out.ok) return null;
     const items = parseExtracts(out.text, needs, paras, date);
-    return items && items.length > 0 ? { items, summary: parseSummary(out.text) } : null;
+    // A valid answer with no items (everything already a need, or nothing to record) stands: the rule
+    // detector would only bring the duplicates back. Only an unusable answer falls back to it.
+    return items ? { items, summary: parseSummary(out.text) } : null;
   }
 
   get model(): string | null {
