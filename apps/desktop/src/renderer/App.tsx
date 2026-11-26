@@ -9,18 +9,29 @@ import './setup/setup.css';
 const BUSY_CALLS: ReadonlySet<string> = new Set(['uploadBlob', 'captureRun', 'captureBindRepo', 'overleafSync', 'notionPage', 'api', 'submit']);
 let inFlight = 0;
 
+/**
+ * The bridge with its busy calls counted. A new plain object, never a Proxy: the preload's bridge is
+ * frozen by contextBridge (read-only, non-configurable properties), and the web bridge keeps its
+ * methods on a class prototype, so every method is copied, bound to the original.
+ */
 function tracked(bridge: MeetlessBridge): MeetlessBridge {
-  return new Proxy(bridge, {
-    get(target, key, recv) {
-      const v = Reflect.get(target, key, recv) as unknown;
-      if (typeof v !== 'function') return v;
-      if (!BUSY_CALLS.has(String(key))) return v.bind(target);
-      return (...args: unknown[]) => {
-        inFlight++;
-        return Promise.resolve((v as (...a: unknown[]) => unknown).apply(target, args)).finally(() => inFlight--);
-      };
-    },
-  });
+  const out: Record<string, unknown> = {};
+  const names = new Set<string>();
+  for (let o: object | null = bridge; o && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) {
+    for (const k of Object.getOwnPropertyNames(o)) if (k !== 'constructor') names.add(k);
+  }
+  for (const k of names) {
+    const v = (bridge as unknown as Record<string, unknown>)[k];
+    if (typeof v !== 'function') continue;
+    const fn = v as (...a: unknown[]) => unknown;
+    out[k] = BUSY_CALLS.has(k)
+      ? (...args: unknown[]) => {
+          inFlight++;
+          return Promise.resolve(fn.apply(bridge, args)).finally(() => inFlight--);
+        }
+      : (...args: unknown[]) => fn.apply(bridge, args);
+  }
+  return out as unknown as MeetlessBridge;
 }
 
 /**
