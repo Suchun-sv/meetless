@@ -133,7 +133,8 @@ Every push to `main` of the public repo runs `.github/workflows/beta.yml`. It bu
 secret (`~/work/meetless-signing/hot-ed25519.key` on the dev server; the public key is in
 `apps/desktop/src/main/hot-update.ts`). Installed builds check it on start and every 15 minutes, and take
 it only when the signature, the shell (Electron version, ABI and fuses), the SHA-512, the size and the zip
-entries check out. Nothing asks the user: a renderer-only change reloads the window after a minute idle;
-anything else runs at the next start, or relaunches silently after ten idle minutes with the window in the
-background and nothing in progress, back on the same bounds and route. A copy that does not start is dropped and the bundled code runs. A change to Electron, the fuses
+entries check out. Checking and downloading run in the background (hot and full releases); a callout in the sidebar offers the
+update with its notes, and the user decides when (「立即刷新」 for a renderer-only hot update, else 「重启并更新」).
+Nothing restarts on its own: an unclicked full release is installed when the app quits, a hot update runs at the
+next start. `hot.json` carries the commit subjects since the previous hot build as its signed notes. A copy that does not start is dropped and the bundled code runs. A change to Electron, the fuses
 or the packaging needs a full release (a `v*` tag), as before.

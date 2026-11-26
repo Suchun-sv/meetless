@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createWriteStream, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import { createWriteStream, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -196,15 +196,20 @@ function defaultUnzip(platform: NodeJS.Platform) {
   return (zip: string, dir: string) => (platform === 'darwin' ? run('ditto', ['-x', '-k', zip, dir]) : run('unzip', ['-q', zip, '-d', dir]));
 }
 
-/** Windows and the AppImage: electron-updater downloads, checks and installs, then restarts the app. */
-export async function electronUpdaterInstall(progress: (percent: number) => void): Promise<void> {
+/** Windows and the AppImage: electron-updater downloads and checks in the background, and installs when the app quits. */
+export async function electronUpdaterDownload(progress: (percent: number) => void): Promise<void> {
   const { autoUpdater } = await import('electron-updater');
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.autoInstallOnAppQuit = true;
   const found = await autoUpdater.checkForUpdates();
   if (!found?.isUpdateAvailable) throw new UpdateError('UPDATE_NONE');
   autoUpdater.on('download-progress', (p: { percent: number }) => progress(Math.round(p.percent)));
   await autoUpdater.downloadUpdate();
+}
+
+/** The click on Windows and the AppImage: install what was downloaded and restart. */
+export async function electronUpdaterApply(): Promise<void> {
+  const { autoUpdater } = await import('electron-updater');
   autoUpdater.quitAndInstall(true, true);
 }
 
@@ -224,7 +229,9 @@ export interface ReleaseUpdaterOptions {
   unzip?: (zip: string, dir: string) => Promise<void>;
   /** macOS: codesign the unpacked bundle against the pinned requirement; tests pass a fake. */
   verifySignature?: (app: string) => Promise<void>;
+  /** Windows and the AppImage: the background download, and the click's install (tests pass fakes). */
   electronUpdater?: (progress: (percent: number) => void) => Promise<void>;
+  electronUpdaterApply?: () => Promise<void>;
   /** macOS: restart into the swapped bundle. */
   relaunch?: () => void;
   onChange?: (s: UpdateState) => void;
@@ -294,15 +301,19 @@ export class ReleaseUpdater {
   check(): Promise<UpdateState> {
     if (this.opts.enabled === false || this.busy()) return Promise.resolve(this.current);
     // The renderer asks when it mounts; a check that just finished answers for it.
-    if (Date.now() - this.lastCheck < 60_000) return Promise.resolve(this.current);
+    if (Date.now() - this.lastCheck < 60_000 && this.state.phase !== 'failed') return Promise.resolve(this.current);
     this.inFlight ??= this.latest()
       .then((p) => {
         this.lastCheck = Date.now();
-        this.set({ available: p ? { version: p.version, notes: [] } : null, checkError: null });
-        return p ? this.notes(p.tag, p.version) : null;
+        const keep = p && this.state.available?.version === p.version ? this.state.available.notes : [];
+        this.set({ available: p ? { version: p.version, notes: keep } : null, checkError: null, lastChecked: new Date().toISOString() });
+        if (!p) this.discard();
+        return p ? this.notes(p.tag, p.version).then((notes) => ({ p, notes })) : null;
       })
-      .then((notes) => {
-        if (notes && this.state.available) this.set({ available: { ...this.state.available, notes } });
+      .then((found) => {
+        if (found && this.state.available) this.set({ available: { ...this.state.available, notes: found.notes } });
+        // Downloaded and checked in the background; the user decides when it is installed.
+        if (found) void this.prepare(found.p);
         return this.current;
       })
       .catch(async (e: unknown) => {
@@ -352,30 +363,91 @@ export class ReleaseUpdater {
     return [`Meetless ${version}`];
   }
 
-  /** The user's click: install the newest release and restart into it. */
+  /** A release downloaded and checked in the background; swapped in on the click, or when the app quits. */
+  private prepared: { version: string; work: string; app: string } | null = null;
+  private preparing: Promise<void> | null = null;
+
+  private fail(e: unknown, what: string): string {
+    const errno = (e as NodeJS.ErrnoException).code;
+    const code = e instanceof UpdateError ? e.code : e instanceof VerifyError ? 'UPDATE_UNTRUSTED' : errno === 'EACCES' || errno === 'EPERM' || errno === 'EROFS' ? 'UPDATE_PERMISSION' : 'UPDATE_FAILED';
+    this.opts.log?.(`update ${what} failed (${code}): ${safeReason(e)}`);
+    this.set({ phase: 'failed', percent: null, error: code });
+    return code;
+  }
+
+  private discard(): void {
+    if (this.prepared?.work) rmSync(this.prepared.work, { recursive: true, force: true });
+    this.prepared = null;
+  }
+
+  /** Background: download and check `p` so that installing it is only a swap. Never throws. */
+  private prepare(p: Pending): Promise<void> {
+    if (this.prepared?.version === p.version || this.opts.kind === 'manual') return Promise.resolve();
+    this.preparing ??= (async () => {
+      try {
+        this.set({ phase: 'downloading', percent: null, error: null });
+        if (this.opts.kind === 'mac') {
+          const r = await this.prepareMac(p);
+          this.discard();
+          this.prepared = { version: p.version, ...r };
+        } else {
+          await (this.opts.electronUpdater ?? electronUpdaterDownload)((percent) => this.progress(percent));
+          this.prepared = { version: p.version, work: '', app: '' };
+        }
+        this.set({ phase: 'ready', percent: null, error: null });
+      } catch (e) {
+        this.fail(e, 'download');
+      } finally {
+        this.preparing = null;
+      }
+    })();
+    return this.preparing;
+  }
+
+  /** The user's click: install the release (downloaded in the background, or now) and restart into it. */
   async install(): Promise<Result<object>> {
     if (this.busy()) return { ok: false, code: 'UPDATE_BUSY' };
     try {
       if (this.opts.kind === 'manual') throw new UpdateError('UPDATE_MANUAL');
-      // Always the newest: what the dialog showed may have been replaced since.
-      this.set({ phase: 'downloading', percent: null, error: null });
-      const p = await this.latest().catch((e: unknown) => {
-        throw e instanceof UpdateError ? e : new UpdateError('UPDATE_DOWNLOAD', String((e as Error).message ?? e));
-      });
-      if (!p) throw new UpdateError('UPDATE_NONE');
-      if (this.opts.kind === 'mac') await this.installMac(p);
-      else {
-        await (this.opts.electronUpdater ?? electronUpdaterInstall)((percent) => this.progress(percent));
+      if (!this.prepared) {
+        const p = await this.latest().catch((e: unknown) => {
+          throw e instanceof UpdateError ? e : new UpdateError('UPDATE_DOWNLOAD', String((e as Error).message ?? e));
+        });
+        if (!p) throw new UpdateError('UPDATE_NONE');
+        await this.prepare(p);
+        if (!this.prepared) throw new UpdateError(this.state.error ?? 'UPDATE_FAILED');
+      }
+      this.set({ phase: 'installing', percent: null, error: null });
+      if (this.opts.kind === 'mac') {
+        const bundle = this.opts.bundlePath!;
+        swapBundle(bundle, this.prepared.app);
+        this.discard();
         this.set({ phase: 'restarting', percent: null });
+        this.opts.relaunch?.();
+      } else {
+        this.set({ phase: 'restarting', percent: null });
+        await (this.opts.electronUpdaterApply ?? electronUpdaterApply)();
       }
       return { ok: true };
     } catch (e) {
-      const errno = (e as NodeJS.ErrnoException).code;
-      const code = e instanceof UpdateError ? e.code : e instanceof VerifyError ? 'UPDATE_UNTRUSTED' : errno === 'EACCES' || errno === 'EPERM' || errno === 'EROFS' ? 'UPDATE_PERMISSION' : 'UPDATE_FAILED';
-      this.opts.log?.(`update install failed (${code}): ${safeReason(e)}`);
-      this.set({ phase: 'failed', percent: null, error: code });
-      return { ok: false, code };
+      return { ok: false, code: this.fail(e, 'install') };
     }
+  }
+
+  /**
+   * The app is quitting with a release ready (the user never clicked): it is swapped in now, so the
+   * next start runs it, as Paseo's installAppUpdateOnQuit does. electron-updater does this itself
+   * (autoInstallOnAppQuit). Synchronous: it runs in will-quit.
+   */
+  installOnQuit(): void {
+    if (this.opts.kind !== 'mac' || !this.prepared?.app || !this.opts.bundlePath) return;
+    try {
+      swapBundle(this.opts.bundlePath, this.prepared.app);
+      this.opts.log?.(`update ${this.prepared.version} installed on quit`);
+    } catch (e) {
+      this.opts.log?.(`update install on quit failed: ${safeReason(e)}`);
+    }
+    this.discard();
   }
 
   private progress(percent: number): void {
@@ -383,7 +455,8 @@ export class ReleaseUpdater {
     if (p !== this.state.percent) this.set({ phase: 'downloading', percent: p });
   }
 
-  private async installMac(p: Pending): Promise<void> {
+  /** Downloads the zip, checks it and unpacks a checked, signed Meetless.app next to the running one. */
+  private async prepareMac(p: Pending): Promise<{ work: string; app: string }> {
     const bundle = this.opts.bundlePath;
     if (!bundle || !bundle.endsWith('.app')) throw new UpdateError('UPDATE_FAILED', `not an app bundle: ${bundle}`);
     const want = macZipName(p.version, this.opts.arch);
@@ -392,6 +465,8 @@ export class ReleaseUpdater {
     if (!file.sha512) throw new UpdateError('UPDATE_CHECKSUM', 'the manifest has no sha512');
     if (!(file.size > 0 && file.size <= ZIP_MAX_BYTES)) throw new UpdateError('UPDATE_DOWNLOAD', `bad size ${file.size} for ${file.url}`);
 
+    // Leftovers of an earlier run that never installed.
+    for (const n of readdirSync(dirname(bundle))) if (n.startsWith('.Meetless-update-') && join(dirname(bundle), n) !== this.prepared?.work) rmSync(join(dirname(bundle), n), { recursive: true, force: true });
     // Next to the running bundle, so the swap is two renames on one volume.
     const work = mkdtempSync(join(dirname(bundle), '.Meetless-update-'));
     try {
@@ -419,22 +494,21 @@ export class ReleaseUpdater {
       if (hash.digest('base64') !== file.sha512) throw new UpdateError('UPDATE_CHECKSUM', `sha512 mismatch for ${file.url}`);
       this.progress(100);
 
-      this.set({ phase: 'installing', percent: null });
       // Nothing is unpacked until the entries are known to stay inside Meetless.app.
       checkZip(zipEntries(zip));
       const unpacked = join(work, 'app');
       await (this.opts.unzip ?? defaultUnzip(this.opts.platform))(zip, unpacked);
+      rmSync(zip, { force: true });
       const app = checkUnpacked(unpacked);
       const info = await bundleInfo(app, this.opts.platform);
       if (info.id !== BUNDLE_ID) throw new VerifyError(`bundle id ${info.id}`);
       if (info.version !== p.version) throw new VerifyError(`bundle version ${info.version} is not the manifest's ${p.version}`);
       if (!newer(info.version, this.opts.currentVersion)) throw new VerifyError(`bundle version ${info.version} is not newer than ${this.opts.currentVersion}`);
       await (this.opts.verifySignature ?? ((a: string) => verifySignature(a, this.opts.platform)))(app);
-      swapBundle(bundle, app);
-    } finally {
+      return { work, app };
+    } catch (e) {
       rmSync(work, { recursive: true, force: true });
+      throw e;
     }
-    this.set({ phase: 'restarting', percent: null });
-    this.opts.relaunch?.();
   }
 }

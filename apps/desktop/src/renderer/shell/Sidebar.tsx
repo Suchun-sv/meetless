@@ -8,7 +8,7 @@ import { displayName } from '../model/state';
 import { Avatar } from '../ui/primitives';
 import { newInputTarget, sidebarModel } from './model';
 import { RenameInput } from './RenameInput';
-import { UpdateEntry } from './UpdateEntry';
+import { UpdateCallout, UpdateEntry } from './UpdateEntry';
 import { isWeb } from '../ui/DesktopOnly';
 
 /** Language names are shown in their own language, not translated. */
@@ -102,6 +102,7 @@ export function Sidebar({ lastProjectId = null }: { lastProjectId?: Id | null } 
       <button type="button" className={`nav${route.view === 'agents' ? ' on' : ''}`} data-testid="nav-agents" onClick={() => go({ view: 'agents' })}>
         <span>{t('nav.agents')}</span>
       </button>
+      {!isWeb(app) && <UpdateCallout />}
       <div className="side-user">
         <Avatar userId={me} />
         <div className="grow">

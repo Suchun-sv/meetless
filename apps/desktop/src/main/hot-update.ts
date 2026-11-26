@@ -46,6 +46,8 @@ export interface BuildInfo {
 }
 
 export interface HotManifest extends BuildInfo {
+  /** Commit subjects since the previous hot build (at most 20), signed with the rest. */
+  notes?: string[];
   shell: Shell;
   file: string;
   sha512: string;
@@ -70,6 +72,8 @@ export function verifyManifest(raw: string, publicKey = HOT_PUBLIC_KEY): HotMani
   if (!/^[0-9a-f]{7,40}$/.test(String(m.commit)) || !str(m.version) || Number.isNaN(Date.parse(m.built)) || !str(m.sha512)) throw new HotError('bad manifest');
   if (!/^hot-[0-9a-f]{7,12}\.zip$/.test(String(m.file)) || !Number.isSafeInteger(m.size) || m.size <= 0 || m.size > HOT_MAX_BYTES) throw new HotError('bad manifest file or size');
   if (!m.shell || !str(m.shell.electron) || !str(m.shell.fuses) || !m.parts || !str(m.parts.main) || !str(m.parts.preload) || !str(m.parts.renderer)) throw new HotError('bad manifest shell or parts');
+  if (m.notes !== undefined && (!Array.isArray(m.notes) || m.notes.some((n) => typeof n !== 'string'))) throw new HotError('bad manifest notes');
+  m.notes = (m.notes ?? []).slice(0, 20).map((n) => n.slice(0, 200));
   return m;
 }
 
@@ -123,7 +127,7 @@ export interface HotState {
   /** The hot commit running now; null for the bundled code. */
   running: string | null;
   /** A verified copy waiting: applied by a reload (`reload`) or on the next start (`restart`). */
-  pending: { commit: string; apply: 'reload' | 'restart' } | null;
+  pending: { commit: string; version: string; apply: 'reload' | 'restart'; notes: string[] } | null;
 }
 
 export interface HotUpdaterOptions {
@@ -250,7 +254,7 @@ export class HotUpdater {
     }
     const apply = applyKind(running.parts, m.parts);
     this.o.log?.(`hot update ${m.commit.slice(0, 7)} ready (${apply})`);
-    this.st = { ...this.st, pending: { commit: m.commit, apply } };
+    this.st = { ...this.st, pending: { commit: m.commit, version: m.version, apply, notes: m.notes ?? [] } };
     this.o.onChange?.(this.state);
   }
 

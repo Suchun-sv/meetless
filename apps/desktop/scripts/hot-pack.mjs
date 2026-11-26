@@ -2,6 +2,7 @@
 // Electron, no source maps) into hot.zip, and writes hot.json: the signed manifest a hot update is
 // checked against (src/main/hot-update.ts). Signed with Ed25519 by Node crypto, from the PEM in
 // $HOT_SIGNING_KEY (or the file $HOT_SIGNING_KEY_FILE). Usage: node scripts/hot-pack.mjs <out-dir>
+import { execFileSync } from 'node:child_process';
 import { createHash, createPrivateKey, sign } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -60,6 +61,21 @@ eocd.writeUInt32LE(offset, 16);
 const zip = Buffer.concat([...locals, cd, eocd]);
 
 const build = JSON.parse(readFileSync('dist/build.json', 'utf8'));
+// What's new: commit subjects since the previous hot build ($HOT_PREV_COMMIT), at most 20, without
+// dot symbols (the UI never shows them; same set as core's noDots).
+const DOTS = /\s*[·•∙⋅●・‧◦⦁⸱･]+\s*/g;
+const subjects = (range) => execFileSync('git', ['log', '--no-merges', '--format=%s', '-n', '20', ...range], { encoding: 'utf8' }).split('\n');
+let lines = [];
+try {
+  lines = process.env.HOT_PREV_COMMIT ? subjects([`${process.env.HOT_PREV_COMMIT}..${build.commit}`]) : subjects([build.commit]);
+} catch {
+  try {
+    lines = subjects([build.commit]);
+  } catch {
+    lines = [];
+  }
+}
+const notes = lines.map((l) => l.replace(DOTS, ' ').trim()).filter(Boolean).slice(0, 20).map((l) => l.slice(0, 200));
 const shell = JSON.parse(readFileSync('dist/shell.json', 'utf8'));
 // Named by commit, so a client holding this manifest never finds the file replaced under it.
 const file = `hot-${build.commit.slice(0, 12)}.zip`;
@@ -68,6 +84,7 @@ const manifest = JSON.stringify({
   version: build.version,
   built: build.built,
   parts: build.parts,
+  notes,
   shell,
   file,
   sha512: createHash('sha512').update(zip).digest('base64'),

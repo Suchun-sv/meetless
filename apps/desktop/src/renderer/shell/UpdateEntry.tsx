@@ -1,38 +1,21 @@
 import { useEffect, useState } from 'react';
-import type { UpdateState } from '@meetless/client/bridge';
+import type { MeetlessBridge, UpdateState } from '@meetless/client/bridge';
 import { useApp } from '../app/AppContext';
 import { Modal } from '../ui/Modal';
 import { Btn } from '../ui/primitives';
 import './update.css';
 
 /*
- * The app-update entry in the sidebar user row (docs/RELEASE.md). The update UI follows Gleeok's
- * update dialog (app/src/renderer, `installRelease` / `latestRelease`): it offers the version, the
- * user confirms with the release notes in view, and a progress line follows the install.
+ * App updates in the sidebar, the way Paseo shows them (packages/app/src/desktop/updates): checking
+ * and downloading run in the background (src/main/release-updater.ts, hot-update.ts); a callout card
+ * above the user row offers what is ready, and the user decides when. An update that is never
+ * clicked goes in when the app quits (a full release) or at the next start (a hot update).
  */
 
-/** Asks the main process for the update state on mount and follows its `update` events. Shows nothing without an updater. */
-export function UpdateEntry() {
-  const { bridge } = useApp();
+/** The main process's update state, followed through `update` events; one check when first asked. */
+function useUpdateState(bridge: MeetlessBridge): [UpdateState | null, () => void] {
   const [state, setState] = useState<UpdateState | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    const off = bridge.subscribe((e) => {
-      if (e.type === 'update') setState(e.update);
-    });
-    bridge
-      .updatesCheck()
-      .then((r) => {
-        if (alive && r.ok) setState(r.update);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-      off();
-    };
-  }, [bridge]);
-  const retry = () => {
+  const check = () => {
     void bridge
       .updatesCheck()
       .then((r) => {
@@ -40,102 +23,134 @@ export function UpdateEntry() {
       })
       .catch(() => undefined);
   };
-  const install = () => {
-    setConfirming(false);
-    // The outcome arrives as `update` events (progress, failure); a restart ends the app.
-    void bridge.updatesInstall().catch(() => undefined);
-  };
-  return <UpdateView state={state} confirming={confirming} onAsk={() => setConfirming(true)} onCancel={() => setConfirming(false)} onInstall={install} onRetry={retry} />;
+  useEffect(() => {
+    const off = bridge.subscribe((e) => {
+      if (e.type === 'update') setState(e.update);
+    });
+    check();
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridge]);
+  return [state, check];
 }
 
-/** What the entry shows for `state`; exported for the component tests. */
-export function UpdateView({
-  state,
-  confirming,
-  onAsk,
-  onCancel,
-  onInstall,
-  onRetry,
-}: {
-  state: UpdateState | null;
-  confirming: boolean;
-  onAsk: () => void;
-  onCancel: () => void;
-  onInstall: () => void;
-  onRetry?: () => void;
-}) {
-  const { t, tr } = useApp();
-  // The version and the hot commit running. Hot updates apply silently (src/main/hot-update.ts).
-  const hotLine = state?.hot ? (
-    <div className="upd-s faint" data-testid="update-version">
-      {`v${state.current}${state.hot.commit ? ` ${state.hot.commit}` : ''}`}
-    </div>
-  ) : null;
-  if (!state?.available) {
-    if (!state?.checkError || !onRetry) return hotLine ? <div className="upd" data-testid="update">{hotLine}</div> : null;
-    // A failed check (network, proxy, timeout) says so, instead of showing nothing.
-    return (
-      <div className="upd" data-testid="update">
-        {hotLine}
-        <button type="button" className="link upd-s tone-danger" data-testid="update-retry" onClick={onRetry}>
-          {t('upd.checkFailed')}
+const DISMISSED = 'meetless.update.dismissed';
+
+/** What the callout offers: a full release first (it replaces everything), else a hot update. */
+export interface CalloutModel {
+  /** Dismissal is per version: the next one shows again. */
+  key: string;
+  error: boolean;
+  version: string;
+  notes: string[];
+  body: 'downloading' | 'ready' | 'installing' | 'failed';
+  percent: number | null;
+  primary: 'restart' | 'refresh' | 'download' | 'retry';
+  disabled: boolean;
+}
+
+export function calloutModel(s: UpdateState | null): CalloutModel | null {
+  if (!s) return null;
+  if (s.available) {
+    const v = `v${s.available.version}`;
+    const base = { key: `full:${s.available.version}`, version: v, notes: s.available.notes, percent: s.percent };
+    if (s.install === 'manual') return { ...base, error: false, body: 'ready', primary: 'download', disabled: false };
+    if (s.phase === 'failed') return { ...base, error: true, body: 'failed', primary: 'retry', disabled: false };
+    if (s.phase === 'downloading') return { ...base, error: false, body: 'downloading', primary: 'restart', disabled: true };
+    if (s.phase === 'installing' || s.phase === 'restarting') return { ...base, error: false, body: 'installing', primary: 'restart', disabled: true };
+    return { ...base, error: false, body: 'ready', primary: 'restart', disabled: false };
+  }
+  const p = s.hot?.pending;
+  if (p) return { key: `hot:${p.commit}`, error: false, version: `v${p.version} ${p.commit.slice(0, 7)}`, notes: p.notes, body: 'ready', percent: null, primary: p.apply === 'reload' ? 'refresh' : 'restart', disabled: false };
+  return null;
+}
+
+/** The update callout card above the sidebar user row (desktop only). */
+export function UpdateCallout() {
+  const { bridge, t } = useApp();
+  const [state, check] = useUpdateState(bridge);
+  const [dismissed, setDismissed] = useState(() => window.localStorage.getItem(DISMISSED));
+  const [notes, setNotes] = useState(false);
+  const m = calloutModel(state);
+  if (!m || m.key === dismissed) return null;
+  const dismiss = () => {
+    window.localStorage.setItem(DISMISSED, m.key);
+    setDismissed(m.key);
+  };
+  const act = () => {
+    if (m.primary === 'retry') return check();
+    if (m.primary === 'download') return void window.open(state!.releasesUrl, '_blank', 'noreferrer');
+    void bridge.updatesInstall().catch(() => undefined);
+  };
+  const label = m.primary === 'refresh' ? t('upd.refreshNow') : m.primary === 'retry' ? t('upd.retry') : m.primary === 'download' ? t('upd.download') : m.body === 'installing' ? t('upd.installing') : t('upd.restartUpdate');
+  return (
+    <div className="upd-card" data-testid="update-callout">
+      <div className="upd-card-h">
+        <strong className={m.error ? 'tone-danger' : undefined}>{m.error ? t('upd.cFailed') : t('upd.cAvail')}</strong>
+        <span className="upd-s">{m.version}</span>
+        <span className="grow" />
+        <button type="button" className="wg-act" aria-label={t('upd.dismiss')} title={t('upd.dismiss')} data-testid="update-dismiss" onClick={dismiss}>
+          ×
         </button>
       </div>
-    );
-  }
-  const { version, notes } = state.available;
-  const progress =
-    state.phase === 'downloading'
-      ? state.percent === null
-        ? t('upd.downloadingNoPct')
-        : t('upd.downloading', { n: state.percent })
-      : state.phase === 'installing'
-        ? t('upd.installing')
-        : state.phase === 'restarting'
-          ? t('upd.restarting')
-          : null;
-  const reason = state.phase === 'failed' ? tr.tDynamic(tr.has(`upd.err.${state.error}`) ? `upd.err.${state.error}` : 'upd.err.UPDATE_FAILED') : null;
-  return (
-    <div className="upd" data-testid="update">
-      <div className="upd-row">
-        <span className="upd-t">{t('upd.available', { v: version })}</span>
-        {progress === null &&
-          (state.install === 'self' ? (
-            <button type="button" className="link upd-go" data-testid="update-install" onClick={onAsk}>
-              {t('upd.install')}
-            </button>
-          ) : (
-            <a className="link upd-go" data-testid="update-download" href={state.releasesUrl} target="_blank" rel="noreferrer">
-              {t('upd.download')}
-            </a>
-          ))}
+      {m.body === 'downloading' && <div className="upd-s">{t('upd.cDownloading', { n: m.percent ?? 0 })}</div>}
+      <div className="row gap6 wrap">
+        <button type="button" className="btn" data-testid="update-notes" onClick={() => setNotes(true)}>
+          {t('upd.whatsNew')}
+        </button>
+        <Btn kind="primary" testId="update-go" disabled={m.disabled} onClick={act}>
+          {label}
+        </Btn>
       </div>
-      {progress !== null && (
-        <div className="upd-s" data-testid="update-progress" aria-live="polite">
-          {progress}
-        </div>
-      )}
-      {reason !== null && <div className="upd-s tone-danger">{t('upd.failed', { reason })}</div>}
-      {confirming && (
-        <Modal onClose={onCancel} testId="update-confirm">
-          <h2>{t('upd.confirmTitle', { v: version })}</h2>
-          <p className="muted small">{t('upd.confirmBody')}</p>
-          <div className="upd-notes-h small faint">{t('upd.notes')}</div>
+      {notes && (
+        <Modal onClose={() => setNotes(false)} testId="update-notes-dialog">
+          <h2>{t('upd.notesTitle', { v: m.version })}</h2>
           <div className="upd-notes">
-            {notes.map((n, i) => (
+            {(m.notes.length ? m.notes : [`Meetless ${m.version}`]).map((n, i) => (
               <p key={i}>{n}</p>
             ))}
           </div>
           <div className="row gap6 upd-foot">
-            <button type="button" className="btn" onClick={onCancel}>
-              {t('common.cancel')}
+            <button type="button" className="btn" onClick={() => setNotes(false)}>
+              {t('upd.done')}
             </button>
-            <Btn kind="primary" testId="update-confirm-go" onClick={onInstall}>
-              {t('upd.confirm')}
-            </Btn>
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** The status line in the sidebar user row: version and hot commit, where updates stand, and 「检查更新」. */
+export function UpdateEntry() {
+  const { bridge, t, fmtClock } = useApp();
+  const [state, check] = useUpdateState(bridge);
+  if (!state) return null;
+  const pending = state.hot?.pending;
+  const status = state.checkError
+    ? t('upd.checkFailed')
+    : state.available && state.phase === 'downloading'
+      ? t('upd.sFound', { v: `v${state.available.version}`, n: state.percent ?? 0 })
+      : state.available && state.phase === 'failed'
+        ? t('upd.cFailed')
+        : state.available
+          ? t('upd.sReady', { v: `v${state.available.version}` })
+          : pending
+            ? t('upd.sReady', { v: `v${pending.version} ${pending.commit.slice(0, 7)}` })
+            : state.lastChecked
+              ? t('upd.sUpToDate', { t: fmtClock(state.lastChecked as never) })
+              : t('upd.sUpToDateNoTime');
+  return (
+    <div className="upd" data-testid="update">
+      <div className="upd-s faint" data-testid="update-version">
+        {`v${state.current}${state.hot?.commit ? ` ${state.hot.commit}` : ''}`}
+      </div>
+      <div className={`upd-s${state.checkError || state.phase === 'failed' ? ' tone-danger' : ''}`} data-testid="update-status">
+        {status}
+      </div>
+      <button type="button" className="link upd-s" data-testid="update-check" onClick={check}>
+        {t('upd.check')}
+      </button>
     </div>
   );
 }

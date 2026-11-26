@@ -90,14 +90,20 @@ export interface UpdateState {
   available: { version: string; notes: string[] } | null;
   install: 'self' | 'manual';
   releasesUrl: string;
-  phase: 'idle' | 'downloading' | 'installing' | 'restarting' | 'failed';
+  /** `ready`: downloaded and checked in the background, installed on the click or when the app quits. */
+  phase: 'idle' | 'downloading' | 'ready' | 'installing' | 'restarting' | 'failed';
+  /** When the last check succeeded. */
+  lastChecked?: string | null;
   /** Download progress 0-100, when known. */
   percent: number | null;
   error: string | null;
   /** `UPDATE_CHECK` when the last check failed (network, proxy, timeout); the UI offers a retry. */
   checkError?: string | null;
-  /** Hot updates (beta channel): the short commit running, and whether a verified one waits for a restart. */
-  hot?: { commit: string | null; restart: boolean };
+  /**
+   * Hot updates: the short commit running, and a verified one waiting (`reload` applies with a
+   * window reload, `restart` with a relaunch; either runs at the next start anyway), with its notes.
+   */
+  hot?: { commit: string | null; restart: boolean; pending: { commit: string; version: string; apply: 'reload' | 'restart'; notes: string[] } | null };
 }
 
 /** A local git repository the user chose. Never carries the local path. */

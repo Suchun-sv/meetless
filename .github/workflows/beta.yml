@@ -25,6 +25,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          # The commit subjects since the previous hot build are its notes.
+          fetch-depth: 0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -39,10 +41,20 @@ jobs:
         env:
           MEETLESS_COMMIT: ${{ github.sha }}
         run: pnpm run build
+      - name: Previous hot build
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release download hot -p hot.json -O "$RUNNER_TEMP/prev-hot.json" 2>/dev/null; then
+            node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const c=JSON.parse(j.manifest).commit;if(/^[0-9a-f]{7,40}$/.test(c))console.log("commit="+c)' "$RUNNER_TEMP/prev-hot.json" >> "$GITHUB_OUTPUT" || true
+          fi
       - name: Pack and sign
         working-directory: apps/desktop
         env:
           HOT_SIGNING_KEY: ${{ secrets.HOT_SIGNING_KEY }}
+          HOT_PREV_COMMIT: ${{ steps.prev.outputs.commit }}
         run: node scripts/hot-pack.mjs release/hot
       - name: Publish to the hot prerelease
         working-directory: apps/desktop/release/hot

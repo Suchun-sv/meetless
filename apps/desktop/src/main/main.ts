@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, net, powerMonitor, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, session, shell } from 'electron';
 import { isWebUrl } from '@meetless/core';
 import { BRIDGE_METHODS, ClientNode, createFileLog, type BridgeEvent, type BridgeMethod, type FileLog, type MeetlessBridge } from '@meetless/client';
 import { invokeChannel, PUSH_CHANNEL } from '../shared/ipc';
@@ -190,7 +190,7 @@ function runApp(): void {
 
   app.setAboutPanelOptions({
     applicationName: 'Meetless',
-    applicationVersion: app.getVersion(),
+    applicationVersion: `${app.getVersion()}${(globalThis as { __meetlessHot?: { commit: string } }).__meetlessHot ? ` ${(globalThis as { __meetlessHot?: { commit: string } }).__meetlessHot!.commit.slice(0, 7)}` : ''}`,
     version: BUILD_LABEL,
     credits: BUILD_NOTE,
   });
@@ -250,8 +250,6 @@ function runApp(): void {
   const relaunchFile = join(app.getPath('userData'), 'hot', 'relaunch.json');
   let restore = readJson<{ bounds?: Electron.Rectangle; minimized?: boolean; route?: unknown }>(relaunchFile);
   rmSync(relaunchFile, { force: true });
-  /** Whether the renderer is in the middle of something (App.tsx `__meetlessBusy`); busy when it cannot say. */
-  const rendererBusy = async (w: BrowserWindow) => (await w.webContents.executeJavaScript('Boolean(window.__meetlessBusy && window.__meetlessBusy())', true).catch(() => true)) as boolean;
   const rendererRoute = async (w: BrowserWindow) => {
     try {
       return JSON.parse((await w.webContents.executeJavaScript('JSON.stringify(window.__meetlessRoute ? window.__meetlessRoute() : null)', true)) as string) as unknown;
@@ -274,53 +272,35 @@ function runApp(): void {
     ...(process.env.MEETLESS_HOT_BASE && !app.isPackaged ? { baseUrl: process.env.MEETLESS_HOT_BASE } : {}),
     fetch: updaterFetch,
     log: (m) => log(m),
-    onChange: (s) => {
-      pushUpdate();
-      if (s.pending?.apply === 'reload') reloadWhenIdle(s.pending.commit);
-      if (s.pending?.apply === 'restart') relaunchWhenAway();
-    },
+    onChange: () => pushUpdate(),
   });
   const hotInfo = () => {
     const s = hot.state;
-    return { commit: (s.running ?? runningBuild?.commit ?? '').slice(0, 7) || null, restart: s.pending?.apply === 'restart' };
+    return { commit: (s.running ?? runningBuild?.commit ?? '').slice(0, 7) || null, restart: s.pending?.apply === 'restart', pending: s.pending };
   };
-  // A renderer-only update: reload into it, on the same route, once nobody has touched the machine
-  // for a minute and nothing is being typed, uploaded or edited.
-  let idleTimer: NodeJS.Timeout | null = null;
-  const reloadWhenIdle = (commit: string) => {
-    if (idleTimer) clearInterval(idleTimer);
-    idleTimer = setInterval(async () => {
-      const w = win;
-      if (!w || powerMonitor.getSystemIdleTime() < 60 || (await rendererBusy(w))) return;
-      clearInterval(idleTimer!);
-      idleTimer = null;
-      const route = await rendererRoute(w);
-      rendererFile = hot.rendererOf(commit);
-      log('hot reload', { commit: commit.slice(0, 7) });
-      void w.loadFile(rendererFile, route ? { query: { route: JSON.stringify(route) } } : undefined).then(() => hot.applied(commit));
-    }, 15_000);
-    idleTimer.unref?.();
-  };
-  // An update to main or preload runs at the next start anyway. It also relaunches silently, but
-  // only after ten idle minutes, with no window in front (or it hidden or minimised) and nothing in
-  // progress; the window comes back with the same bounds and route.
-  let awayTimer: NodeJS.Timeout | null = null;
-  const relaunchWhenAway = () => {
-    if (awayTimer) return;
-    awayTimer = setInterval(async () => {
-      const w = win;
-      if (!w || w.isDestroyed() || powerMonitor.getSystemIdleTime() < 600) return;
-      const away = BrowserWindow.getFocusedWindow() === null || w.isMinimized() || !w.isVisible();
-      if (!away || (await rendererBusy(w))) return;
-      clearInterval(awayTimer!);
-      awayTimer = null;
-      mkdirSync(dirname(relaunchFile), { recursive: true });
-      writeFileSync(relaunchFile, JSON.stringify({ bounds: w.getNormalBounds(), minimized: w.isMinimized() || !w.isVisible(), route: await rendererRoute(w) }));
-      log('hot relaunch', { commit: hot.state.pending?.commit.slice(0, 7) ?? '' });
-      app.relaunch();
-      app.quit();
-    }, 60_000);
-    awayTimer.unref?.();
+  /**
+   * The user's click on a hot update (nothing applies it on its own; it runs at the next start
+   * anyway): a renderer-only one reloads the window on the same route, any other relaunches with
+   * the window's bounds and route kept.
+   */
+  const applyHot = async (): Promise<boolean> => {
+    const p = hot.state.pending;
+    const w = win;
+    if (!p || !w) return false;
+    const route = await rendererRoute(w);
+    if (p.apply === 'reload') {
+      rendererFile = hot.rendererOf(p.commit);
+      log('hot reload', { commit: p.commit.slice(0, 7) });
+      await w.loadFile(rendererFile, route ? { query: { route: JSON.stringify(route) } } : undefined);
+      hot.applied(p.commit);
+      return true;
+    }
+    mkdirSync(dirname(relaunchFile), { recursive: true });
+    writeFileSync(relaunchFile, JSON.stringify({ bounds: w.getNormalBounds(), minimized: w.isMinimized(), route }));
+    log('hot relaunch', { commit: p.commit.slice(0, 7) });
+    app.relaunch();
+    app.quit();
+    return true;
   };
 
   const updater = new ReleaseUpdater({
@@ -366,9 +346,15 @@ function runApp(): void {
         return r && !r.canceled ? (r.filePaths[0] ?? null) : null;
       },
       updates: {
-        check: async () => ({ ...(await updater.check()), hot: hotInfo() }),
-        // Only full releases are installed on a click; hot updates apply on their own.
-        install: () => updater.install(),
+        check: async () => {
+          void hot.check();
+          return { ...(await updater.check()), hot: hotInfo() };
+        },
+        // The click: a full release when one is offered (it swaps the bundle), else the hot update waiting.
+        install: async () => {
+          if (updater.current.available) return updater.install();
+          return (await applyHot()) ? { ok: true } : { ok: false, code: 'UPDATE_NONE' };
+        },
       },
     });
     log('client opened', { session: (await node.snapshot()).session !== null });
@@ -403,6 +389,9 @@ function runApp(): void {
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });
+
+  // A full release downloaded in the background and never clicked goes in as the app quits.
+  app.on('will-quit', () => updater.installOnQuit());
 
   app.on('before-quit', () => {
     log('quit');

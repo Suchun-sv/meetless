@@ -8,3 +8,9 @@
 .upd-notes{display:flex;flex-direction:column;gap:var(--space-1);border:var(--border);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);max-height:240px;overflow:auto;font-size:var(--text-sm)}
 .upd-notes p{margin:0}
 .upd-foot{justify-content:flex-end}
+
+/* The update callout above the user row (Paseo's sidebar callout). */
+.upd-card{margin:0 var(--space-2) var(--space-2);padding:var(--space-3);border:var(--border);border-radius:var(--radius-lg);background:var(--color-surface);display:flex;flex-direction:column;gap:var(--space-2)}
+.upd-card-h{display:flex;align-items:baseline;gap:var(--space-2)}
+.upd-card-h strong{font-size:var(--text-sm);font-weight:var(--weight-semibold)}
+.upd-card .tone-danger{color:var(--color-danger)}
