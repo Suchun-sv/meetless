@@ -327,6 +327,7 @@ function checkExtracts(s: State, projectId: Id, body: { id: Id }[], xs: ExtractI
       expect: optText(x.expect, 'expect'),
       verify: optText(x.verify, 'verify'),
       conflict: x.type === 'rev' && x.conflict === true,
+      due: x.due == null ? null : date(x.due, 'due'),
       state: null,
       decidedBy: null,
       resultNeedId: null,

@@ -629,6 +629,8 @@
   "ask.xt.action": "行动",
   "ask.from": "来自 {title}",
   "ask.accept": "接受",
+  "ask.due": "截止",
+  "ask.dueClear": "清除",
   "ask.ignore": "忽略",
   "ask.link": "关联到 {need}",
   "ask.linkOther": "关联到其他需求",

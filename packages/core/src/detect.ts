@@ -188,6 +188,8 @@ export function detectScene(text: string, fallback: Scene): Scene {
   if (mail >= 2 || lines.slice(0, 12).some((l) => /^(主题|subject)\s*[:：]/i.test(l))) return 'mail';
   const speaker = lines.filter((l) => /^[^\s:：，。,.!?？！]{1,16}\s*[:：]\s*\S/.test(l) && !/^https?:/i.test(l)).length;
   const stamped = lines.filter((l) => /^(\[?\d{1,4}[-/.]\d{1,2}[-/.]\d{1,2}\s+)?\[?\d{1,2}:\d{2}(:\d{2})?\]?\s/.test(l) || /^\S{1,16}\s+\d{1,2}:\d{2}(:\d{2})?$/.test(l)).length;
-  if (speaker >= 2 || stamped >= 2) return 'chat';
+  // 「小龙女超儿 12:48：…」: a name, the time, then what was said.
+  const timed = lines.filter((l) => /^\S{1,20}\s+\d{1,2}:\d{2}(:\d{2})?\s*[:：]/.test(l)).length;
+  if (speaker >= 2 || stamped >= 2 || timed >= 2) return 'chat';
   return fallback;
 }

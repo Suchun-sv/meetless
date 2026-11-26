@@ -84,7 +84,7 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
   const { paras, lead } = toItems(text, `${inputId}-p`, { addAll: opts.addAll === true });
   const view = deps.service.view(p.userId);
   const needs = isPrivate ? projectNeeds(view, req.projectId) : projectNeeds(shareableView(view), req.projectId);
-  const byModel = deps.ai?.enabled ? await deps.ai.extract(p.userId, text, needs, paras) : null;
+  const byModel = deps.ai?.enabled ? await deps.ai.extract(p.userId, text, needs, paras, date) : null;
   const extracts = byModel?.items ?? detectExtracts(paras, needs, 8, lead);
   const detector = byModel ? `deepseek/${deps.ai!.model}` : DETECTOR_ID;
 

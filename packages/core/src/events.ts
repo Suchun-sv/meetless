@@ -35,6 +35,8 @@ export interface ExtractInput {
   expect?: string | null;
   verify?: string | null;
   conflict?: boolean;
+  /** YYYY-MM-DD: when the text says the item is due. */
+  due?: IsoDate | null;
 }
 
 /**

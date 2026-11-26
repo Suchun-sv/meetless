@@ -216,6 +216,8 @@ export interface Extract {
   verify: string | null;
   /** The paragraph contradicts the target need: decided in "To confirm", not here. */
   conflict: boolean;
+  /** A due date the text gives (「下周结束」 resolved against the message's own time); accepting files the need under the DDL of that day. */
+  due: IsoDate | null;
   state: ExtractState | null;
   decidedBy: Id | null;
   /** Need created or revised by accepting. */

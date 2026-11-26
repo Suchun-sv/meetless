@@ -1,6 +1,8 @@
 import { noDots, type Extract, type Id, type Input } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
+import { runCmds } from '../collab/answer';
+import { acceptCommands } from '../collab/confirm';
 import { newId } from '../model/ids';
 import { Btn, NeedChip, Pill, RulesMark } from '../ui/primitives';
 import { EXTRACT_TONE, extractAction } from './model';
@@ -23,11 +25,12 @@ export function ExtractPanel({
   onHover: (extractId: Id | null) => void;
   blockingNeedIds: Id[];
 }) {
-  const { t, submit, openOverlay } = useApp();
+  const { t, submit, openOverlay, live, today } = useApp();
 
   const onAccept = (x: Extract) => {
     if (!input) return;
-    void submit('extract.accepted', { inputId: input.id, extractId: x.id, needId: newId('n') });
+    // Under the DDL of its due date, created first when the project has none that day.
+    void runCmds(acceptCommands(live, input, x, newId('n'), today), submit);
   };
   const onIgnore = (x: Extract) => {
     if (!input) return;

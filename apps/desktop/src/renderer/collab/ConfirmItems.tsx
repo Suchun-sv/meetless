@@ -5,13 +5,14 @@
  * questions live in their own files (ConflictItem.tsx, QuestionItem.tsx); detected extracts and
  * agent proposals are here.
  */
-import { clip, currentOrLatestRound, SEP, userName, type Id } from '@meetless/core';
+import { useState } from 'react';
+import { clip, currentOrLatestRound, SEP, userName, type Id, type IsoDate } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import { newId } from '../model/ids';
 import { Btn, NeedChip, Pill, RulesMark } from '../ui/primitives';
 import { useAnswer } from './answer';
-import { extractCommand, proposalCommand, type ConfirmItem } from './confirm';
+import { acceptCommands, extractCommand, proposalCommand, type ConfirmItem } from './confirm';
 
 export { ConflictItem, decisionHandoff, HandoffPick } from './ConflictItem';
 export { QuestionItem } from './QuestionItem';
@@ -26,16 +27,19 @@ type ProposalEntry = Extract<ConfirmItem, { kind: 'proposal' }>;
  * then stays and is released (submit shows the notice).
  */
 export function ExtractItem({ item, projectId, onDone }: { item: ExtractEntry; projectId: Id; onDone(label: string): void }) {
-  const { t } = useApp();
+  const { t, live, today } = useApp();
   const { busy, run } = useAnswer(onDone);
   const { input, extract: x } = item;
   const what = clip(x.text, 60);
+  // The due date the text gave, changeable or clearable before accepting.
+  const [due, setDue] = useState<IsoDate | ''>(x.due ?? '');
+  const datable = x.type === 'new' || x.type === 'hyp';
   return (
     <div className="q" data-testid="ask-item" data-kind="extract" data-id={item.id}>
       <div className="row gap6">
         <Pill tone="neutral">{t(`ask.xt.${x.type}` as MessageKey)}</Pill>
         <span className="grow" />
-        <RulesMark />
+        {input.detector.startsWith('deepseek') ? <Pill tone="ai">{t('ai.deepseek')}</Pill> : <RulesMark />}
       </div>
       <div className="small faint">{t('ask.from', { title: input.title })}</div>
       <div className="q-t">{x.text}</div>
@@ -44,8 +48,19 @@ export function ExtractItem({ item, projectId, onDone }: { item: ExtractEntry; p
           <NeedChip projectId={projectId} needId={x.needId} />
         </div>
       )}
+      {datable && (
+        <label className="row gap6 small faint" data-testid="x-due">
+          {t('ask.due')}
+          <input className="inp inp-sm" type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label={t('ask.due')} />
+          {due && (
+            <button type="button" className="link small" onClick={() => setDue('')}>
+              {t('ask.dueClear')}
+            </button>
+          )}
+        </label>
+      )}
       <div className="row gap6">
-        <Btn kind="primary" testId="x-accept" disabled={busy} onClick={() => run([extractCommand('accept', input, x, newId('n'))], t('ask.accept') + SEP + what)}>
+        <Btn kind="primary" testId="x-accept" disabled={busy} onClick={() => run(acceptCommands(live, input, x, newId('n'), today, due || null), t('ask.accept') + SEP + what)}>
           {t('ask.accept')}
         </Btn>
         <Btn testId="x-ignore" disabled={busy} onClick={() => run([extractCommand('ignore', input, x, '')], t('ask.ignore') + SEP + what)}>

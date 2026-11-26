@@ -6,7 +6,7 @@ import { displayName } from '../model/state';
 import { NeedChip, Status } from '../ui/primitives';
 import { routeErrorText } from '../setup/model';
 import { runCmds } from '../collab/answer';
-import { extractCommand } from '../collab/confirm';
+import { acceptCommands } from '../collab/confirm';
 import { newId } from '../model/ids';
 import { importCommand, importPriv, importResult, onDashboardFor } from './model';
 
@@ -224,7 +224,11 @@ export function Reply({ reply, scope, messageId }: ReplyProps) {
       const bulk = input ? pending.filter((x) => !(x.conflict && input.privateTo === null)) : [];
       const allNew = a.items.length > 0 && a.items.every((x) => x.type === 'new');
       const head = a.items.length === 0 ? t('ans.added.none') : allNew ? t('ans.added.new', { n: a.items.length }) : t('ans.added', { n: a.items.length });
-      const acceptAll = () => (input ? runCmds(bulk.map((x) => extractCommand('accept', input, x, newId('n'))), submit) : Promise.resolve(false));
+      const acceptAll = () => {
+        if (!input) return Promise.resolve(false);
+        const made = new Map<string, string>();
+        return runCmds(bulk.flatMap((x) => acceptCommands(live, input, x, newId('n'), today, x.due ?? null, made)), submit);
+      };
       return (
         <>
           <div>{head}</div>

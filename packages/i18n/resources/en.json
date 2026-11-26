@@ -629,6 +629,8 @@
   "ask.xt.action": "Action",
   "ask.from": "From {title}",
   "ask.accept": "Accept",
+  "ask.due": "Due",
+  "ask.dueClear": "Clear",
   "ask.ignore": "Ignore",
   "ask.link": "Link to {need}",
   "ask.linkOther": "Link to another need",

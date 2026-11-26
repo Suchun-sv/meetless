@@ -5,10 +5,12 @@
  * renders and submits from this.
  */
 import {
+  clip,
   isOpen,
   matchNeed,
   openConflicts,
   projectNeeds,
+  projectRounds,
   questionId,
   toConfirm,
   type Conflict,
@@ -25,6 +27,8 @@ import {
   type WorkItem,
 } from '@meetless/core';
 import type { Cmd } from './model';
+import { newId } from '../model/ids';
+import { ddlStart } from '../setup/model';
 
 export type ConfirmItem =
   | { kind: 'conflict'; id: Id; conflict: Conflict; delegatedBy: Id | null }
@@ -86,6 +90,26 @@ export function extractCommand(a: 'accept' | 'ignore', input: Input, x: Extract,
   const payload: EventPayloads['extract.accepted'] = { inputId: input.id, extractId: x.id };
   if (x.type === 'new' || x.type === 'hyp') payload.needId = needId;
   return { type: 'extract.accepted', payload };
+}
+
+/**
+ * The commands that accept extract `x` (a new need id `needId`). When it has a due date (`due`,
+ * the extract's own unless changed in To confirm), the need goes under the project's DDL of that
+ * day, created first (titled from the item) when there is none. `made` carries DDLs created earlier
+ * in the same batch (「全部接受」), so two items due the same day share one.
+ */
+export function acceptCommands(s: State, input: Input, x: Extract, needId: Id, today: IsoDate, due: IsoDate | null = x.due ?? null, made: Map<IsoDate, Id> = new Map()): Cmd[] {
+  if ((x.type !== 'new' && x.type !== 'hyp') || !due) return [extractCommand('accept', input, x, needId)];
+  const rounds = projectRounds(s, input.projectId);
+  const out: Cmd[] = [];
+  let roundId = rounds.find((r) => r.due === due && r.status !== 'delivered')?.id ?? made.get(due);
+  if (!roundId) {
+    roundId = newId('rnd');
+    made.set(due, roundId);
+    out.push({ type: 'round.created', payload: { roundId, projectId: input.projectId, title: clip(x.text, 40), kind: 'hard', start: ddlStart(rounds, due, today), due } });
+  }
+  out.push({ type: 'extract.accepted', payload: { inputId: input.id, extractId: x.id, needId, roundId } });
+  return out;
 }
 
 /** The `proposal.accepted` / `proposal.rejected` command for an open agent proposal. */
