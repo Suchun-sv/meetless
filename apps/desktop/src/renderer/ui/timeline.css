@@ -56,3 +56,22 @@
 .pc-6{background:color-mix(in srgb, var(--color-avatar-6) 22%, transparent);border-color:var(--color-avatar-6)}
 .pc-7{background:color-mix(in srgb, var(--color-avatar-7) 22%, transparent);border-color:var(--color-avatar-7)}
 .pc-8{background:color-mix(in srgb, var(--color-avatar-8) 22%, transparent);border-color:var(--color-avatar-8)}
+
+/* Event ticks (ui/timeline-events.ts): a thin vertical line per day, coloured by type, never a dot. */
+.tl-evbar{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-1)}
+.tl-evsw{display:inline-flex;align-items:center;gap:var(--space-1);color:var(--color-text-secondary);cursor:pointer}
+.tl-legend{display:inline-flex;flex-wrap:wrap;gap:var(--space-1) var(--space-3)}
+.tl-lg{display:inline-flex;align-items:center;gap:var(--space-1);font-size:var(--text-xs);color:var(--color-text-secondary)}
+.tl-lg-t{display:inline-block;width:2px;height:10px;border-radius:1px;background:var(--tick)}
+.tl-ev{position:relative;height:18px;margin-top:var(--space-1)}
+.tl-tick{position:absolute;top:0;height:18px;width:14px;margin-left:-7px;border:0;padding:0;background:transparent;cursor:pointer;color:var(--tick)}
+.tl-tick::before{content:"";position:absolute;left:6px;top:1px;bottom:1px;width:2px;border-radius:1px;background:var(--tick)}
+.tl-tick:hover::before{width:3px;left:5.5px}
+.tl-tick-n{position:absolute;left:10px;top:-2px;font-size:var(--text-xs);line-height:1;font-variant-numeric:tabular-nums;color:var(--color-text-secondary)}
+.ev-added{--tick:var(--color-info)}
+.ev-met{--tick:var(--color-success)}
+.ev-artifact{--tick:var(--color-warning)}
+.ev-delivered{--tick:var(--color-text)}
+.ev-scene{--tick:var(--color-text-tertiary)}
+.tl-tick.ev-agent,.tl-lg.ev-agent{--tick:var(--color-ai)}
+@media (max-width: 760px){.tl-tick{width:20px;margin-left:-10px}.tl-tick::before{left:9px}.tl-tick-n{left:13px}}

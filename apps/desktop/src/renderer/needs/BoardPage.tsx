@@ -8,6 +8,7 @@ import { Timeline } from '../ui/Timeline';
 import { Lineage } from './Lineage';
 import { boardColumns, boardViewFor, cardFacts, pendingNeedIds, type BoardColumn, type BoardView } from './model';
 import { NeedCard } from './NeedCard';
+import { leftText } from '../dash/model';
 import { NewNeedModal } from './NewNeedModal';
 import './needs.css';
 
@@ -23,16 +24,18 @@ function BoardColumnView({ col, pending, selectedNeedId }: { col: BoardColumn; p
   const { live, me, t, fmtDay } = useApp();
   const card = (n: (typeof col.live)[number]) => <NeedCard key={n.id} need={n} facts={cardFacts(live, n, me, pending)} selected={n.id === selectedNeedId} />;
   return (
-    <section className={`col${col.round ? ` col-${col.round.status}` : ''}`} data-testid="board-col" data-round={col.round?.n ?? ''}>
+    <section className={`col${col.round ? ` col-${col.round.status}` : ''}`} data-testid="board-col" data-round={col.round?.n ?? ''} data-status={col.status ?? ''}>
       <div className="col-h">
         {col.round ? (
           <>
-            <strong>{t('round', { n: col.round.n }) + SEP + col.round.title}</strong>
+            <strong>{col.round.title || t('round', { n: col.round.n })}</strong>
             <div className="col-sub">
-              <span>{t(`round.${col.round.status}` as MessageKey) + SEP + t('round.due', { d: fmtDay(col.round.due) })}</span>
-              {col.daysLeft !== null && <span className="left">{SEP + t('round.left', { n: col.daysLeft })}</span>}
+              <span>{fmtDay(col.round.due) + (col.round.status === 'delivered' ? SEP + t('round.delivered') : '')}</span>
+              {col.daysLeft !== null && <span className="left">{SEP + leftText(t, col.daysLeft)}</span>}
             </div>
           </>
+        ) : col.status ? (
+          <strong>{t(`col.${col.status}` as MessageKey)}</strong>
         ) : (
           <strong>{t('col.unscheduled')}</strong>
         )}
@@ -107,7 +110,7 @@ export function BoardPage({ composer }: PageProps) {
           {noRounds && <p className="faint small">{t('board.noRounds')}</p>}
           <div className="cols">
             {cols.map((col) => (
-              <BoardColumnView key={col.round?.id ?? 'unscheduled'} col={col} pending={pending} selectedNeedId={selectedNeedId} />
+              <BoardColumnView key={col.round?.id ?? col.status ?? 'unscheduled'} col={col} pending={pending} selectedNeedId={selectedNeedId} />
             ))}
           </div>
         </>

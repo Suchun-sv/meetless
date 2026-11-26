@@ -48,6 +48,8 @@ export function boardViewFor(v: BoardView, projectId: Id | null): BoardView {
 
 export interface BoardColumn {
   round: Round | null;
+  /** A project with no DDLs is laid out by status instead. */
+  status?: 'todo' | 'doing' | 'done';
   live: Need[];
   refuted: Need[];
   daysLeft: number | null;
@@ -69,8 +71,15 @@ export function boardColumns(s: State, projectId: Id, f: BoardFilter, today: Iso
   const column = (round: Round | null, ns: Need[]): BoardColumn => {
     const refuted = ns.filter((n) => n.status === 'refuted');
     const live = orderLive(ns.filter((n) => n.status !== 'refuted'));
-    return { round, live, refuted, daysLeft: round && cur && round.id === cur.id ? daysLeft(round, today) : null };
+    return { round, live, refuted, daysLeft: round && round.status !== 'delivered' ? daysLeft(round, today) : null };
   };
+  void cur;
+  if (projectRounds(s, projectId).length === 0) {
+    // No DDLs: 待做 / 进行中 / 完成 (dropped and parked count as done; refuted stays apart in done).
+    const group = (n: Need): 'todo' | 'doing' | 'done' =>
+      n.status === 'todo' || n.status === 'untested' ? 'todo' : n.status === 'doing' || n.status === 'partial' || n.status === 'testing' ? 'doing' : 'done';
+    return (['todo', 'doing', 'done'] as const).map((st) => ({ ...column(null, needs.filter((n) => group(n) === st)), status: st }));
+  }
   const columns = projectRounds(s, projectId)
     .filter((r) => f.round === null || r.n === f.round)
     .map((r) => column(r, needs.filter((n) => n.roundId === r.id)));

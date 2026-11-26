@@ -64,11 +64,22 @@ export function routeErrorText(t: Translator['t'], errorText: (code: string) => 
 }
 
 /** The commands a new project's form produces: `project.created` with the trimmed name, or none when it is blank. */
-export function newProjectCommands(a: { projectId: Id; name: string; description: string }): U1Command[] {
+/**
+ * `project.created`, then one `round.created` per filled-in DDL row (a title and a date), in date
+ * order, each starting at the previous one's date (the first today). `roundId` mints the ids.
+ */
+export function newProjectCommands(a: { projectId: Id; name: string; description: string; ddls?: { title: string; due: IsoDate }[]; today?: IsoDate; roundId?: () => Id }): U1Command[] {
   const name = a.name.trim();
   if (!name) return [];
   const description = a.description.trim();
-  return [{ type: 'project.created', payload: { projectId: a.projectId, name, ...(description ? { description } : {}) } }];
+  const out: U1Command[] = [{ type: 'project.created', payload: { projectId: a.projectId, name, ...(description ? { description } : {}) } }];
+  const rows = (a.ddls ?? []).filter((r) => r.title.trim() && isDay(r.due)).sort((x, y) => x.due.localeCompare(y.due));
+  const today = a.today ?? new Date().toISOString().slice(0, 10);
+  rows.forEach((r, i) => {
+    const start = ddlStart(rows.slice(0, i), r.due, today);
+    out.push({ type: 'round.created', payload: { roundId: a.roundId?.() ?? `rnd-${a.projectId}-${i + 1}`, projectId: a.projectId, title: r.title.trim(), kind: 'hard', start, due: r.due } });
+  });
+  return out;
 }
 
 /** Everyone not already a member of `projectId`, sorted by display name (the "Add member" picker). */
@@ -148,8 +159,15 @@ const addDays = (d: IsoDate, n: number): IsoDate => new Date(dayMs(d) + n * DAY_
  */
 export function nextRoundDraft(rounds: Round[], today: IsoDate): RoundDraft {
   const latestDue = rounds.reduce<IsoDate | null>((max, r) => (max === null || r.due > max ? r.due : max), null);
-  const start = latestDue ? addDays(latestDue, 1) : today;
-  return { title: '', kind: 'hard', start, due: addDays(start, 13) };
+  // A DDL: its date is what matters; the start stays empty (see `ddlStart`) and the kind is always `hard`.
+  return { title: '', kind: 'hard', start: '', due: addDays(latestDue && latestDue > today ? latestDue : today, 14) };
+}
+
+/** A DDL's start when none is given: the previous DDL's due date, else today (never after its own due). */
+export function ddlStart(rounds: readonly { due: IsoDate }[], due: IsoDate, today: IsoDate): IsoDate {
+  const prev = rounds.reduce<IsoDate | null>((max, r) => (r.due < due && (max === null || r.due > max) ? r.due : max), null);
+  const s = prev ?? today;
+  return s > due ? due : s;
 }
 
 /** Whether `d` is a real calendar day in `YYYY-MM-DD` form (what a date input gives; '' once cleared). */
@@ -166,9 +184,10 @@ function isDay(d: string): boolean {
  */
 export function roundDraftError(t: Translator['t'], d: RoundDraft): string | null {
   if (!d.title.trim()) return t('pj.titleMissing');
-  if (!isDay(d.start)) return t('pj.startMissing');
+  // The start is optional: empty means `ddlStart`.
+  if (d.start !== '' && !isDay(d.start)) return t('pj.startMissing');
   if (!isDay(d.due)) return t('pj.dueMissing');
-  if (d.due < d.start) return t('pj.dueBeforeStart');
+  if (d.start !== '' && d.due < d.start) return t('pj.dueBeforeStart');
   return null;
 }
 
@@ -184,8 +203,8 @@ export function canSubmitRound(t: Translator['t'], d: RoundDraft, busy: boolean)
 }
 
 /** `round.created` for a new round from its draft (the title trimmed); `roundId` is minted by the caller. */
-export function roundCreateCommand(projectId: Id, d: RoundDraft, roundId: Id): U1Command {
-  return { type: 'round.created', payload: { roundId, projectId, title: d.title.trim(), kind: d.kind, start: d.start, due: d.due } };
+export function roundCreateCommand(projectId: Id, d: RoundDraft, roundId: Id, start: IsoDate = d.start): U1Command {
+  return { type: 'round.created', payload: { roundId, projectId, title: d.title.trim(), kind: 'hard', start: d.start || start, due: d.due } };
 }
 
 /**
@@ -202,8 +221,7 @@ export function roundUpdateCommand(r: Round, d: RoundDraft): U1Command | null {
   const title = d.title.trim();
   const patch: { roundId: Id; title?: string; kind?: RoundKind; start?: IsoDate; due?: IsoDate } = { roundId: r.id };
   if (title !== r.title) patch.title = title;
-  if (d.kind !== r.kind) patch.kind = d.kind;
-  if (d.start !== r.start) patch.start = d.start;
+  if (d.start !== '' && d.start !== r.start) patch.start = d.start;
   if (d.due !== r.due) patch.due = d.due;
   if (Object.keys(patch).length === 1) return null;
   return { type: 'round.updated', payload: patch };

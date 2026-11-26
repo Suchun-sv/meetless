@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { myProjectIds, projectRounds, SEP, type Id, type IsoDate } from '@meetless/core';
 import { useApp } from '../app/AppContext';
 import { avatarTone } from './tone';
+import { EV_TYPES, eventDays, projectEvents, type EventDay, type TimelineEvent } from './timeline-events';
 import './timeline.css';
 
 const DAY = 86_400_000;
@@ -24,12 +25,65 @@ export function packLanes<T>(items: T[], start: (x: T) => number, end: (x: T) =>
   return lanes.map((l) => l.items);
 }
 
+/** The event legend and the 「显示事件」 switch. */
+function EventBar({ on, setOn }: { on: boolean; setOn: (v: boolean) => void }) {
+  const { t } = useApp();
+  return (
+    <div className="tl-evbar">
+      <label className="tl-evsw small">
+        <input type="checkbox" checked={on} data-testid="tl-events" onChange={(e) => setOn(e.target.checked)} />
+        {t('ev.show')}
+      </label>
+      {on && (
+        <span className="tl-legend">
+          {EV_TYPES.map((k) => (
+            <span key={k} className={`tl-lg ev-${k}`}>
+              <span className="tl-lg-t" />
+              {t(`ev.${k}`)}
+            </span>
+          ))}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** One thin tick per day with events (a count when there are several), on the timeline's own axis. */
+function EventTicks({ days, x, names }: { days: EventDay[]; x: (d: IsoDate) => number; names?: Map<Id, string> }) {
+  const { t, fmtDay, go, openNeed } = useApp();
+  const open = (ev: TimelineEvent) => {
+    const g = ev.target;
+    if ('need' in g) openNeed(ev.projectId, g.need);
+    else if ('artifact' in g) go({ view: 'artifacts', projectId: ev.projectId, focusId: g.artifact });
+    else if ('round' in g) go({ view: 'deliveries', projectId: ev.projectId, round: g.round });
+    else go({ view: 'inputs', projectId: ev.projectId, focusId: g.input });
+  };
+  return (
+    <div className="tl-ev">
+      {days.map((d) => {
+        const at = x(d.date);
+        if (at < 0 || at > 100) return null;
+        const line = (ev: TimelineEvent) =>
+          `${names ? `${names.get(ev.projectId) ?? ''} ` : ''}${t(`ev.${ev.type}`)} ${ev.what}${ev.scene ? ` ${t(`lin.type.${ev.scene}` as never)}` : ''}`;
+        const lines = d.events.slice(0, 6).map(line);
+        if (d.events.length > 6) lines.push(t('ev.more', { n: d.events.length - 6 }));
+        return (
+          <button key={d.date} type="button" className={`tl-tick ev-${d.type}`} style={{ left: pct(at) }} title={`${fmtDay(d.date)}\n${lines.join('\n')}`} aria-label={`${fmtDay(d.date)} ${lines[0]}`} data-testid="tl-tick" onClick={() => open(d.events[0]!)}>
+            {d.events.length > 1 && <span className="tl-tick-n">{d.events.length}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The project's rounds as a gantt with a today line (prototype ui.jsx Timeline). Clicking a round
  * selects it; clicking the selected round clears the selection. Inline styles carry geometry only.
  */
-export function Timeline({ projectId, selected = null, onSelect }: { projectId: Id; selected?: number | null; onSelect?: (n: number | null) => void }) {
+export function Timeline({ projectId, selected = null, onSelect, events }: { projectId: Id; selected?: number | null; onSelect?: (n: number | null) => void; events?: 'on' | 'off' }) {
   const { live, today, t, fmtDay } = useApp();
+  const [showEv, setShowEv] = useState(events === 'on');
   const rounds = projectRounds(live, projectId);
   if (rounds.length === 0) return null;
   const s = Math.min(...rounds.map((r) => ms(r.start)));
@@ -40,6 +94,7 @@ export function Timeline({ projectId, selected = null, onSelect }: { projectId: 
   for (let d = s; d <= e; d += 7 * DAY) weeks.push(new Date(d).toISOString().slice(0, 10));
   return (
     <div className="tl">
+      {events && <EventBar on={showEv} setOn={setShowEv} />}
       <div className="tl-grid">
         <div className="tl-axis">
           {weeks
@@ -53,6 +108,7 @@ export function Timeline({ projectId, selected = null, onSelect }: { projectId: 
             {t('tl.today')}
           </span>
         </div>
+        {events && showEv && <EventTicks days={eventDays(projectEvents(live, projectId))} x={x} />}
         <div className="tl-rows">
           {packLanes(rounds, (r) => ms(r.start), (r) => ms(r.due) + DAY).map((lane) => (
             <div key={lane[0]!.id} className="tl-row">
@@ -62,7 +118,7 @@ export function Timeline({ projectId, selected = null, onSelect }: { projectId: 
             const width = Math.max(2, right - left);
             const narrow = width < 10;
             const on = selected === r.n;
-            const label = t('round', { n: r.n }) + SEP + r.title;
+            const label = (r.title || t('round', { n: r.n }));
             const mark = (r.kind === 'hard' ? t('tl.hard') : t('tl.cadence')) + SEP + fmtDay(r.due);
             return (
               <span key={r.id}>
@@ -97,6 +153,7 @@ export function Timeline({ projectId, selected = null, onSelect }: { projectId: 
 export function ProjectsTimeline() {
   const { live, me, today, t, fmtDay, go } = useApp();
   const [all, setAll] = useState(false);
+  const [showEv, setShowEv] = useState(false);
   const pids = [...myProjectIds(live, me)].sort();
   // Each project's colour: its own hash, or the next free one when two projects would share it.
   const tone = new Map<Id, number>();
@@ -127,6 +184,7 @@ export function ProjectsTimeline() {
             </span>
           ))}
         </div>
+        <EventBar on={showEv} setOn={setShowEv} />
         <div className="seg tlm-seg">
           <button type="button" className={all ? '' : 'on'} data-testid="tlm-window" onClick={() => setAll(false)}>
             {t('tl.window')}
@@ -150,6 +208,7 @@ export function ProjectsTimeline() {
               {t('tl.today')}
             </span>
           </div>
+          {showEv && <EventTicks days={eventDays(pids.flatMap((pid) => projectEvents(live, pid)))} x={x} names={new Map(pids.map((pid) => [pid, live.projects[pid]?.name ?? pid]))} />}
           <div className="tlm-lanes">
             {lanes.map((lane) => (
               <div key={`${lane[0]!.pid}-${lane[0]!.r.id}`} className="tlm-lane" data-testid="tlm-lane">

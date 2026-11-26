@@ -61,7 +61,7 @@ function Progress({ projectId }: { projectId: Id }) {
       <div className="pg-top">
         <div>
           <div className="pg-big">{leftText(t, pc.daysLeft)}</div>
-          <div className="muted">{[t('round', { n: round.n }), round.title, t('round.due', { d: fmtDay(round.due) })].join(SEP)}</div>
+          <div className="muted">{[round.title || t('round', { n: round.n }), t('round.due', { d: fmtDay(round.due) })].join(SEP)}</div>
         </div>
       </div>
       <Bar a={pc.done} b={pc.ext} />
@@ -232,7 +232,7 @@ function RoundsCard({ projectId }: { projectId: Id }) {
   const { live, go, t } = useApp();
   const cur = currentRound(live, projectId);
   if (projectRounds(live, projectId).length === 0) return <p className="muted small">{t('dl.noRounds')}</p>;
-  return <Timeline projectId={projectId} selected={cur?.n ?? null} onSelect={(n) => go({ view: 'deliveries', projectId, ...(n !== null ? { round: n } : cur ? { round: cur.n } : {}) })} />;
+  return <Timeline projectId={projectId} events="on" selected={cur?.n ?? null} onSelect={(n) => go({ view: 'deliveries', projectId, ...(n !== null ? { round: n } : cur ? { round: cur.n } : {}) })} />;
 }
 
 /** One project dashboard card's body, by id. Home-only card ids never reach this (`ProjectDashPage` only ever asks for `PROJECT_CARDS`). */

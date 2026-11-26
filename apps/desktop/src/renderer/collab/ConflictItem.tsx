@@ -100,7 +100,7 @@ export function ConflictItem({ item, projectId, onDone }: { item: ConflictEntry;
           <span>{t('cf.park', { need: code })}</span>
           {rounds.map((r) => (
             <button key={r.id} type="button" className="chip" data-testid="cf-park" data-round={r.id} disabled={busy} onClick={() => park(r.id)}>
-              {t('round', { n: r.n }) + SEP + r.title}
+              {(r.title || t('round', { n: r.n }))}
             </button>
           ))}
           <button type="button" className="chip" data-testid="cf-park" data-round="none" disabled={busy} onClick={() => park(null)}>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { projectRounds, SEP, type Artifact, type Id, type Need, type State, type WorkItem } from '@meetless/core';
+import { projectRounds, type Artifact, type Id, type Need, type State, type WorkItem } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import { Avatar, FileKind, NeedChip, Pill, RulesMark, SourceTag, Status } from '../ui/primitives';
@@ -27,7 +27,7 @@ function RoundRow({ projectId, need, busy, setBusy }: { projectId: Id; need: Nee
     <div className="kv">
       <span>{t('dr.round')}</span>
       <span className="row gap6 wrap">
-        <span>{round ? t('round', { n: round.n }) + SEP + round.title : t('round.none')}</span>
+        <span>{round ? (round.title || t('round', { n: round.n })) : t('round.none')}</span>
         {need.autoRound && <RulesMark onFix={() => setFixing((f) => !f)} />}
       </span>
       {fixing && (
@@ -44,7 +44,7 @@ function RoundRow({ projectId, need, busy, setBusy }: { projectId: Id; need: Nee
                 if (await withBusy(setBusy, () => submit(cmd.type, cmd.payload), onThrow)) setFixing(false);
               }}
             >
-              {t('round', { n: r.n }) + SEP + r.title}
+              {(r.title || t('round', { n: r.n }))}
             </button>
           ))}
         </div>

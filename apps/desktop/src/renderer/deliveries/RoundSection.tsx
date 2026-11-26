@@ -28,7 +28,7 @@ export function RoundSection({ projectId, section }: { projectId: Id; section: D
     <section className={`dl${round.status === 'planned' ? ' dl-planned' : ''}`} data-testid="dl-round" data-round={round.n} data-status={round.status}>
       <div className="dl-h">
         <span className={`tl-ms ms-${round.kind} s-${round.status} static`} />
-        <strong>{t('round', { n: round.n }) + SEP + noDots(round.title)}</strong>
+        <strong>{(noDots(round.title) || t('round', { n: round.n }))}</strong>
         <Pill tone={tone}>{t(`round.${round.status}`)}</Pill>
         <span className="small faint">{t('round.due', { d: fmtDay(round.due) }) + SEP + t(round.kind === 'hard' ? 'tl.hard' : 'tl.cadence')}</span>
       </div>

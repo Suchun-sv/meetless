@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { projectRounds, SEP, type Id, type Round } from '@meetless/core';
+import { daysBetween, projectRounds, SEP, type Id, type Round } from '@meetless/core';
+import { leftText } from '../dash/model';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import type { PageProps } from '../app/pages';
 import { newId } from '../model/ids';
 import { Btn } from '../ui/primitives';
 import { Timeline } from '../ui/Timeline';
-import { canSubmitRound, nextRoundDraft, roundCreateCommand, roundDraftError, roundUpdateCommand, type RoundDraft } from './model';
+import { canSubmitRound, ddlStart, nextRoundDraft, roundCreateCommand, roundDraftError, roundUpdateCommand, type RoundDraft } from './model';
 import './setup.css';
 
 /** Round status as coloured text, never a dot (contract: no dot symbols anywhere). */
@@ -35,19 +36,13 @@ function RoundFields({ prefix, draft, onChange }: { prefix: string; draft: Round
         aria-label={t('pj.roundTitle')}
         data-testid={`${prefix}-title`}
       />
-      <div className="seg" role="group" aria-label={t('pj.roundKind')} data-testid={`${prefix}-kind`}>
-        {(['hard', 'cadence'] as const).map((k) => (
-          <button type="button" key={k} className={draft.kind === k ? 'on' : undefined} onClick={() => onChange({ ...draft, kind: k })}>
-            {t(k === 'hard' ? 'tl.hard' : 'tl.cadence')}
-          </button>
-        ))}
-      </div>
       <input
         className="inp"
         type="date"
         value={draft.start}
         onChange={(e) => onChange({ ...draft, start: e.target.value })}
         aria-label={t('pj.roundStart')}
+        title={t('pj.roundStart')}
         data-testid={`${prefix}-start`}
       />
       <input
@@ -92,7 +87,7 @@ export function RoundsPage(_props: PageProps) {
     setAddTried(true);
     if (!canSubmitRound(t, draft, addBusy)) return;
     const roundId = newId('rnd');
-    const cmd = roundCreateCommand(projectId, draft, roundId);
+    const cmd = roundCreateCommand(projectId, draft, roundId, ddlStart(rounds, draft.due, today));
     setAddBusy(true);
     const r = await submit(cmd.type, cmd.payload);
     setAddBusy(false);
@@ -151,15 +146,15 @@ export function RoundsPage(_props: PageProps) {
                   </>
                 ) : (
                   <span className="grow">
-                    {t('round', { n: r.n })}
+                    {r.title || t('round', { n: r.n })}
                     {SEP}
-                    {r.title}
-                    {SEP}
-                    <span className="small muted">{t(r.kind === 'hard' ? 'tl.hard' : 'tl.cadence')}</span>
-                    {SEP}
-                    <span className="small muted">
-                      {fmtDay(r.start)} – {fmtDay(r.due)}
-                    </span>
+                    <span className="small muted">{fmtDay(r.due)}</span>
+                    {r.status !== 'delivered' && (
+                      <>
+                        {SEP}
+                        <span className="small muted">{leftText(t, daysBetween(today, r.due))}</span>
+                      </>
+                    )}
                   </span>
                 )}
                 <span className={`st tone-${STATUS_TONE[r.status]}`}>{t(`round.${r.status}` as MessageKey)}</span>

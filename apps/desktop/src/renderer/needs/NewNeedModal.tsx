@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { currentRound, projectRounds, SEP, type Id, type NeedKind } from '@meetless/core';
+import { currentRound, projectRounds, type Id, type NeedKind } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import { newId } from '../model/ids';
@@ -108,7 +108,7 @@ export function NewNeedModal({ projectId, onClose }: { projectId: Id; onClose: (
           <option value="">{t('round.none')}</option>
           {projectRounds(live, projectId).map((r) => (
             <option key={r.id} value={r.id}>
-              {t('round', { n: r.n }) + SEP + r.title}
+              {(r.title || t('round', { n: r.n }))}
             </option>
           ))}
         </select>

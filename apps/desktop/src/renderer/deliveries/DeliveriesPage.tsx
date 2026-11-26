@@ -36,7 +36,7 @@ export function DeliveriesPage({ composer }: PageProps) {
         </div>
       ) : (
         <>
-          <Timeline projectId={projectId} selected={selected} onSelect={setSelected} />
+          <Timeline projectId={projectId} selected={selected} onSelect={setSelected} events="on" />
           {deliverySections(live, projectId, selected).map((section) => (
             <RoundSection key={section.round.id} projectId={projectId} section={section} />
           ))}

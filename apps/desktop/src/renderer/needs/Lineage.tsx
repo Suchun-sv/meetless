@@ -126,7 +126,7 @@ export function Lineage({ projectId }: { projectId: Id }) {
       {sections.length === 0 && <p className="muted small">{t('lin.none')}</p>}
       {sections.map((sec) => (
         <section key={sec.round?.id ?? 'other'} className="lin-sec">
-          <h3 className="lin-sec-h">{sec.round ? `${t('round', { n: sec.round.n })} ${sec.round.title} ${fmtDay(sec.round.start)} – ${fmtDay(sec.round.due)}` : t('lin.other')}</h3>
+          <h3 className="lin-sec-h">{sec.round ? `${sec.round.title || t('round', { n: sec.round.n })} ${fmtDay(sec.round.start)} – ${fmtDay(sec.round.due)}` : t('lin.other')}</h3>
           {sec.nodes.map((n) => (
             <Node key={n.key} projectId={projectId} node={n} />
           ))}

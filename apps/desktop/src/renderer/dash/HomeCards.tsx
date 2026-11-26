@@ -41,7 +41,7 @@ function Projects() {
               <strong className="grow">{p?.name ?? ''}</strong>
               <span className={`small${row.daysLeft !== null && row.daysLeft <= 5 ? ' tone-warning' : ' faint'}`}>{leftText(t, row.daysLeft)}</span>
             </div>
-            {row.round && <div className="small muted">{[t('round', { n: row.round.n }), row.round.title, t('round.due', { d: fmtDay(row.round.due) })].join(SEP)}</div>}
+            {row.round && <div className="small muted">{[row.round.title || t('round', { n: row.round.n }), t('round.due', { d: fmtDay(row.round.due) })].join(SEP)}</div>}
             <Bar a={row.done} b={row.ext} />
             <div className="small faint">{t('pg.done', { a: row.done, b: row.ext })}</div>
           </button>
@@ -186,7 +186,7 @@ function Due() {
           <button type="button" key={item.projectId} className="hrow" onClick={() => go({ view: 'dash', projectId: item.projectId })}>
             <span className="grow hrow-t">
               {p?.name ?? ''}
-              {r && <span className="faint">{SEP}{t('round', { n: r.n })} {r.title}</span>}
+              {r && <span className="faint">{SEP}{r.title || t('round', { n: r.n })}</span>}
             </span>
             <span className={`small${item.daysLeft <= 5 ? ' tone-warning' : ' faint'}`}>{[r ? fmtDay(r.due) : '', leftText(t, item.daysLeft)].join(SEP)}</span>
           </button>
