@@ -4,7 +4,7 @@ import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import { requesterLabel } from '../inputs/model';
 import { NeedChip, Pill, Status } from '../ui/primitives';
-import { FLOW_FILTERS, flowSections, type FlowFilter, type FlowItem, type FlowNode } from './lineage';
+import { FLOW_FILTERS, flowTimeline, type FlowFilter, type FlowItem, type FlowNode } from './lineage';
 import { childrenOf } from './model';
 
 /** A need row: its chip and status, with the needs derived from it nested under a quiet 「衍生」. */
@@ -72,45 +72,78 @@ function ItemRow({ projectId, item }: { projectId: Id; item: FlowItem }) {
   }
 }
 
-function Node({ projectId, node }: { projectId: Id; node: FlowNode }) {
-  const { live, t, fmtDay } = useApp();
-  const [open, setOpen] = useState(false);
+/** Expanded scenes per project, for the session. */
+const OPEN = new Map<Id, Set<string>>();
+
+/** The first produced item as one line, for a collapsed scene. */
+function preview(live: ReturnType<typeof useApp>['live'], it: FlowItem | undefined): string {
+  if (!it) return '';
+  if (it.kind === 'need' || it.kind === 'rev' || it.kind === 'decision') {
+    const n = live.needs[it.needId];
+    return n ? `${n.code} ${n.title}` : '';
+  }
+  return it.text;
+}
+
+/** A scene card: always shown; what it produced folds open on a click, its original text behind 「原文」. */
+function Scene({ projectId, node }: { projectId: Id; node: FlowNode }) {
+  const { live, t } = useApp();
+  const set = OPEN.get(projectId) ?? new Set<string>();
+  OPEN.set(projectId, set);
+  const [open, setOpen] = useState(set.has(node.key));
+  const [orig, setOrig] = useState(false);
   const who = requesterLabel(live, node.from);
-  const facts = [node.date ? fmtDay(node.date) : t('lin.pending'), who].filter(Boolean).join(SEP);
+  const toggle = () => {
+    if (open) set.delete(node.key);
+    else set.add(node.key);
+    setOpen(!open);
+  };
   return (
-    <div className="lin-node" data-testid="lin-node" data-type={node.type}>
-      <button type="button" className="lin-node-h" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <Pill tone={node.type === 'proposal' ? 'ai' : 'neutral'}>{t(`lin.type.${node.type}` as MessageKey)}</Pill>
-        {node.ai && node.type !== 'proposal' && <Pill tone="ai">{t('ai.deepseek')}</Pill>}
-        <span className="small faint">{facts}</span>
-        {node.title && <strong className="lin-node-t">{node.title}</strong>}
-        <span className="grow" />
-        <span className="small faint">{t('lin.made', { n: node.items.length })}</span>
+    <div className={`lin-card${open ? ' open' : ''}`} data-testid="lin-node" data-type={node.type}>
+      <button type="button" className="lin-card-h" aria-expanded={open} onClick={toggle}>
+        <span className="lin-card-top">
+          <Pill tone={node.type === 'proposal' ? 'ai' : 'neutral'}>{t(`lin.type.${node.type}` as MessageKey)}</Pill>
+          {node.ai && node.type !== 'proposal' && <Pill tone="ai">{t('ai.deepseek')}</Pill>}
+          {node.title && <strong className="lin-node-t">{node.title}</strong>}
+        </span>
+        <span className="lin-card-m small faint">
+          {[who, t('lin.made', { n: node.items.length })].filter(Boolean).join(SEP)}
+          {!open && node.items.length > 0 && <span className="lin-prev">{SEP + preview(live, node.items[0])}</span>}
+        </span>
       </button>
       {open && (
-        <div className="lin-orig" data-testid="lin-original">
-          {node.original.length ? node.original.map((p, i) => <p key={i}>{p}</p>) : <p className="faint">{t('common.none')}</p>}
+        <div className="lin-card-b">
+          {node.items.length > 0 && (
+            <ul className="tree">
+              {node.items.map((it, i) => (
+                <ItemRow key={i} projectId={projectId} item={it} />
+              ))}
+            </ul>
+          )}
+          <button type="button" className="link small" data-testid="lin-orig" aria-expanded={orig} onClick={() => setOrig((v) => !v)}>
+            {t('lin.original')}
+          </button>
+          {orig && (
+            <div className="lin-orig" data-testid="lin-original">
+              {node.original.length ? node.original.map((p, i) => <p key={i}>{p}</p>) : <p className="faint">{t('common.none')}</p>}
+            </div>
+          )}
         </div>
-      )}
-      {node.items.length > 0 && (
-        <ul className="tree">
-          {node.items.map((it, i) => (
-            <ItemRow key={i} projectId={projectId} item={it} />
-          ))}
-        </ul>
       )}
     </div>
   );
 }
 
 /**
- * The Lineage tab: a time flow of where the project's needs came from. Sections by round (newest
- * first, then 「其他」), source nodes newest first, each with what it produced; a type filter on top.
+ * The Lineage tab as a vertical timeline, newest at the top: a line on the left, each source a card
+ * attached to it by a short tick with its date on the left; DDL due dates as diamonds on the line,
+ * and today as a short labelled rule across it. A type filter on top.
  */
 export function Lineage({ projectId }: { projectId: Id }) {
-  const { live, t, fmtDay } = useApp();
+  const { live, t, fmtDay, today } = useApp();
   const [filter, setFilter] = useState<FlowFilter>('all');
-  const sections = flowSections(live, projectId, filter);
+  const entries = flowTimeline(live, projectId, filter, today);
+  const sources = entries.some((e) => e.kind === 'node');
   return (
     <div className="lineage" data-testid="lineage">
       <div className="lin-top">
@@ -123,15 +156,31 @@ export function Lineage({ projectId }: { projectId: Id }) {
           ))}
         </div>
       </div>
-      {sections.length === 0 && <p className="muted small">{t('lin.none')}</p>}
-      {sections.map((sec) => (
-        <section key={sec.round?.id ?? 'other'} className="lin-sec">
-          <h3 className="lin-sec-h">{sec.round ? `${sec.round.title || t('round', { n: sec.round.n })} ${fmtDay(sec.round.start)} – ${fmtDay(sec.round.due)}` : t('lin.other')}</h3>
-          {sec.nodes.map((n) => (
-            <Node key={n.key} projectId={projectId} node={n} />
-          ))}
-        </section>
-      ))}
+      {!sources && <p className="muted small">{t('lin.none')}</p>}
+      <ol className="lin-line">
+        {entries.map((e) =>
+          e.kind === 'today' ? (
+            <li key="today" className="lin-e lin-today" data-testid="lin-today">
+              <span className="lin-date">{t('tl.today')}</span>
+              <span className="lin-rail" />
+            </li>
+          ) : e.kind === 'ddl' ? (
+            <li key={`ddl-${e.round.id}`} className="lin-e lin-ddl" data-testid="lin-ddl">
+              <span className="lin-date">{fmtDay(e.date)}</span>
+              <span className="lin-rail">
+                <span className={`lin-ms s-${e.round.status}`} />
+              </span>
+              <span className="lin-ddl-t">{t('lin.ddl', { title: e.round.title || t('round', { n: e.round.n }), d: fmtDay(e.round.due) })}</span>
+            </li>
+          ) : (
+            <li key={e.node.key} className="lin-e lin-src">
+              <span className="lin-date">{e.node.date ? fmtDay(e.node.date) : t('lin.pending')}</span>
+              <span className="lin-rail lin-tick" />
+              <Scene projectId={projectId} node={e.node} />
+            </li>
+          ),
+        )}
+      </ol>
     </div>
   );
 }

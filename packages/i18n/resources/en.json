@@ -237,6 +237,8 @@
   "lin.title": "Lineage",
   "lin.feedback": "Feedback",
   "lin.direct": "Raised directly",
+  "lin.ddl": "DDL {title} {d}",
+  "lin.original": "Original text",
   "lin.derived": "Derived",
   "lin.decision": "Decision",
   "lin.dec.revise": "Revised by the new input",

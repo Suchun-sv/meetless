@@ -161,3 +161,20 @@ export function flowSections(s: State, projectId: Id, filter: FlowFilter = 'all'
   if (rest?.length) out.push({ round: null, nodes: rest.sort(newest) });
   return out;
 }
+
+/** One entry on the vertical lineage line: a source, a DDL's due date, or today. */
+export type FlowEntry = { kind: 'node'; date: IsoDate; node: FlowNode } | { kind: 'ddl'; date: IsoDate; round: Round } | { kind: 'today'; date: IsoDate };
+
+/**
+ * The lineage as one line, newest first: the sources (filtered), each DDL's due date, and today.
+ * A source with no date (an open agent proposal) counts as today. On the same day a DDL comes
+ * first, then today, then the sources.
+ */
+export function flowTimeline(s: State, projectId: Id, filter: FlowFilter, today: IsoDate): FlowEntry[] {
+  const out: FlowEntry[] = [];
+  for (const node of flowNodes(s, projectId)) if (inFilter(filter, node.type)) out.push({ kind: 'node', date: node.date ?? today, node });
+  for (const r of projectRounds(s, projectId)) out.push({ kind: 'ddl', date: r.due, round: r });
+  out.push({ kind: 'today', date: today });
+  const order = { ddl: 0, today: 1, node: 2 } as const;
+  return out.sort((a, b) => b.date.localeCompare(a.date) || order[a.kind] - order[b.kind] || (a.kind === 'node' && b.kind === 'node' ? b.node.seq - a.node.seq : 0));
+}

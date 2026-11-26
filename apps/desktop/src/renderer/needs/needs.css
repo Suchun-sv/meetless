@@ -125,3 +125,42 @@
   .col{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--space-2)}
   .col>.col-h,.col>.refuted,.col>.pad{grid-column:1/-1}
 }
+
+/* Lineage as a vertical timeline (Lineage.tsx): a line on the left, newest at the top. Each entry is
+   date | rail | content; a source is attached by a short horizontal tick, a DDL is a diamond on the
+   line, today a short rule across it. No dots or circles. */
+.lin-line{list-style:none;margin:0;padding:0;position:relative}
+.lin-line::before{content:"";position:absolute;top:0;bottom:0;left:calc(72px + var(--space-3) + 10px);border-left:var(--border-width) solid var(--color-border-strong)}
+.lin-e{display:grid;grid-template-columns:72px 24px minmax(0,1fr);column-gap:var(--space-3);align-items:start;padding:var(--space-2) 0;position:relative}
+.lin-date{grid-area:1/1;text-align:right;font-size:var(--text-xs);color:var(--color-text-tertiary);font-variant-numeric:tabular-nums;padding-top:var(--space-3);white-space:nowrap}
+.lin-rail{grid-area:1/2;position:relative;align-self:stretch;min-height:24px}
+.lin-tick::after{content:"";position:absolute;left:10px;right:calc(var(--space-3) * -1);top:calc(var(--space-3) + 8px);border-top:var(--border-width) solid var(--color-text-tertiary)}
+.lin-e>.lin-card,.lin-ddl-t{grid-area:1/3;min-width:0}
+.lin-card{border:var(--border);border-radius:var(--radius-lg);background:var(--color-bg)}
+.lin-card-h{display:flex;flex-direction:column;gap:var(--space-1);width:100%;border:0;background:transparent;padding:var(--space-3);text-align:left;cursor:pointer;color:inherit;font:inherit;border-radius:var(--radius-lg)}
+.lin-card-h:hover{background:var(--color-hover)}
+.lin-card-top{display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap;min-width:0}
+.lin-card-m{display:flex;min-width:0;white-space:nowrap}
+.lin-prev{overflow:hidden;text-overflow:ellipsis;color:var(--color-text-secondary)}
+.lin-card-b{padding:0 var(--space-3) var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)}
+.lin-card-b .link{align-self:flex-start}
+.lin-ms{position:absolute;left:6px;top:calc(var(--space-2) + 2px);width:9px;height:9px;transform:rotate(45deg);background:var(--color-danger)}
+.lin-ms.s-planned{opacity:.45}
+.lin-ms.s-delivered{background:var(--color-text-tertiary)}
+.lin-ddl{padding:var(--space-1) 0}
+.lin-ddl .lin-date{padding-top:var(--space-1)}
+.lin-ddl-t{font-size:var(--text-sm);font-weight:var(--weight-semibold);padding-top:var(--space-1)}
+.lin-today{padding:var(--space-1) 0}
+.lin-today .lin-date{padding-top:0;color:var(--color-text);font-weight:var(--weight-semibold)}
+.lin-today .lin-rail{min-height:0}
+.lin-today .lin-rail::after{content:"";position:absolute;left:-6px;width:34px;top:6px;border-top:calc(var(--border-width) * 2) solid var(--color-text)}
+/* Narrow main column: the line stays on the left, the date goes above the card. */
+@container main (max-width: 560px){
+  .lin-line::before{left:10px}
+  .lin-e{grid-template-columns:24px minmax(0,1fr);column-gap:var(--space-2)}
+  .lin-date{grid-area:1/2;text-align:left;padding-top:0}
+  .lin-rail{grid-area:1/1/3/2}
+  .lin-e>.lin-card,.lin-ddl-t{grid-area:2/2}
+  .lin-tick::after{top:calc(var(--space-5) + 8px);right:calc(var(--space-2) * -1)}
+  .lin-today .lin-date{grid-area:1/2}
+}
