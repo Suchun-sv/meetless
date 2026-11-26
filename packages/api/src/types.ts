@@ -9,6 +9,7 @@ import type {
   NeedKind,
   NeedStatus,
   Requester,
+  Scene,
   SearchHit,
   Seq,
   WorkEffect,
@@ -130,6 +131,8 @@ export interface ApiSpec {
       from: Requester | null;
       date: IsoDate;
       private: boolean;
+      /** The scene when the text shows none (detected otherwise): the composer sends `agent`; default `doc`. */
+      scene?: Scene;
     };
     res: { inputId: Id; seq: Seq; extracts: number };
   };

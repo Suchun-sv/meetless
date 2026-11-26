@@ -21,7 +21,7 @@ function titleFrom(text: string): string {
  */
 async function addAsInput(deps: ApiDeps, p: Principal, projectId: Id, text: string, messageId: Id, priv: boolean, today: string): Promise<AgentReply> {
   const inputId = `in-${messageId}`;
-  await importInput(deps, p, { projectId, inputId, title: titleFrom(text), kind: 'txt', blobHash: null, text, from: null, date: today, private: priv }, { addAll: true });
+  await importInput(deps, p, { projectId, inputId, title: titleFrom(text), kind: 'txt', blobHash: null, text, from: null, date: today, private: priv, scene: 'agent' }, { addAll: true });
   const input = deps.service.view(p.userId).inputs[inputId]!;
   const byModel = input.detector.startsWith('deepseek');
   return {

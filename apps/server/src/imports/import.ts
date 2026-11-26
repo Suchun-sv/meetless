@@ -1,4 +1,4 @@
-import { DETECTOR_ID, detectExtracts, INPUT_KINDS, projectNeeds, shareableView, toItems } from '@meetless/core';
+import { DETECTOR_ID, detectExtracts, detectScene, INPUT_KINDS, projectNeeds, SCENES, shareableView, toItems, type Scene } from '@meetless/core';
 import type { InputKind, Requester } from '@meetless/core';
 import type { ApiRequest, ApiResponse } from '@meetless/api';
 import type { Principal } from '../auth';
@@ -51,6 +51,9 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
   const from = optObject(req.from, 'from') as Requester | null;
   const date = reqString(req.date, 'date');
   const isPrivate = reqBool(req.private, 'private');
+  // The scene when the text shows none (chat lines, mail headers): the caller's, else a document.
+  const sceneHint = optString(req.scene, 'scene');
+  if (sceneHint !== null && !(SCENES as readonly string[]).includes(sceneHint)) throw new ApiError('BAD_REQUEST', { field: 'scene' });
 
   deps.service.requireMember(p.userId, req.projectId);
 
@@ -99,6 +102,7 @@ export async function importInput(deps: ApiDeps, p: Principal, req: ApiRequest<'
       body: paras,
       extracts,
       detector,
+      scene: detectScene(text, (sceneHint as Scene | null) ?? 'doc'),
       private: isPrivate,
     },
   });

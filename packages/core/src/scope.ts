@@ -66,6 +66,7 @@ export function eventScope(s: State, e: DomainEvent): EventScope {
       return { projectId: w?.projectId ?? null, privateTo: w?.privateTo ?? null };
     }
     case 'input.imported':
+    case 'input.scene_set':
     case 'extract.accepted':
     case 'extract.ignored':
       return input(e.payload.inputId);

@@ -103,3 +103,18 @@
   .kv>span:first-child{margin-top:var(--space-1)}
   .wlist li{gap:var(--space-2)}
 }
+
+/* Lineage as a time flow (Lineage.tsx): round sections, source nodes, what each produced. One column on every width. */
+.lin-top{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-4)}
+.lin-top h2{margin:0}
+.lin-filter{flex-wrap:wrap}
+.lin-sec{margin-bottom:var(--space-6)}
+.lin-sec-h{margin:0 0 var(--space-2);font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--color-text-secondary);font-variant-numeric:tabular-nums}
+.lin-node{border:var(--border);border-radius:var(--radius-lg);padding:var(--space-3);margin-bottom:var(--space-2)}
+.lin-node-h{display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap;width:100%;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.lin-node-t{font-size:var(--text-sm);font-weight:var(--weight-medium)}
+.lin-orig{margin-top:var(--space-2);padding:var(--space-1) var(--space-3);border-left:var(--border-width) solid var(--color-border-strong);font-size:var(--text-sm);color:var(--color-text-secondary)}
+.lin-orig p{margin:0 0 var(--space-1)}
+.lin-row{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
+.lin-pending{border:0;background:transparent;padding:0;cursor:pointer;color:inherit;font:inherit;text-align:left}
+@media (max-width: 760px){.lineage{padding:var(--space-3) var(--space-4) var(--space-8)}}

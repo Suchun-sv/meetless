@@ -222,10 +222,16 @@ export interface Extract {
   resultNeedId: Id | null;
 }
 
+/** The occasion an input records (its scene), shown in the lineage: a meeting or voice note, an email, a chat, an agent conversation, a document, handwriting. */
+export const SCENES = ['meeting', 'mail', 'chat', 'agent', 'doc', 'handwritten'] as const;
+export type Scene = (typeof SCENES)[number];
+
 export interface Input {
   id: Id;
   projectId: Id;
   kind: InputKind;
+  /** Set on import (detected from the text) and changeable later (`input.scene_set`); null for inputs from before it existed. */
+  scene: Scene | null;
   title: string;
   from: Requester | null;
   date: IsoDate;

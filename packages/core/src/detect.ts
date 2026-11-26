@@ -1,6 +1,6 @@
 import type { ExtractInput } from './events';
 import { clip, codesIn, overlap, tokenSet } from './text';
-import type { Id, Need } from './types';
+import type { Id, Need, Scene } from './types';
 
 /**
  * Rule-based need detection (SIMULATED: no model is called). Every paragraph
@@ -176,4 +176,18 @@ export function detectExtracts(paras: Paragraph[], needs: Need[], max = 8, lead:
     if (ACTION_WORDS.test(t)) out.push({ id, type: 'action', text: clip(t, 160), paraId: p.id });
   }
   return out;
+}
+
+/**
+ * The scene of pasted or typed text: a chat (several 「张三：…」 lines, or chat timestamps), an email
+ * (a From / 发件人 / Subject / 主题 header), otherwise `fallback` (the agent conversation, or a document).
+ */
+export function detectScene(text: string, fallback: Scene): Scene {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const mail = lines.slice(0, 12).filter((l) => /^(发件人|收件人|抄送|主题|发送时间|from|to|cc|subject|date|sent)\s*[:：]/i.test(l)).length;
+  if (mail >= 2 || lines.slice(0, 12).some((l) => /^(主题|subject)\s*[:：]/i.test(l))) return 'mail';
+  const speaker = lines.filter((l) => /^[^\s:：，。,.!?？！]{1,16}\s*[:：]\s*\S/.test(l) && !/^https?:/i.test(l)).length;
+  const stamped = lines.filter((l) => /^(\[?\d{1,4}[-/.]\d{1,2}[-/.]\d{1,2}\s+)?\[?\d{1,2}:\d{2}(:\d{2})?\]?\s/.test(l) || /^\S{1,16}\s+\d{1,2}:\d{2}(:\d{2})?$/.test(l)).length;
+  if (speaker >= 2 || stamped >= 2) return 'chat';
+  return fallback;
 }

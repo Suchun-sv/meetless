@@ -9,6 +9,7 @@ import {
   HYP_STATUSES,
   HOME_CARDS,
   INPUT_KINDS,
+  SCENES,
   PROJECT_CARDS,
   SOURCE_KINDS,
   WORK_EFFECTS,
@@ -33,6 +34,7 @@ import {
   type SourceKind,
   type State,
   type WorkItem,
+  type Scene,
 } from './types';
 
 // ---------------------------------------------------------------- helpers
@@ -288,7 +290,13 @@ function openConflictsFor(s: State, input: Input, e: { seq: number }): void {
 }
 
 function srcForInput(input: Input): SourceKind {
+  if (input.scene) return input.scene === 'handwritten' ? 'file' : input.scene;
   return input.kind === 'md' ? 'meeting' : input.kind === 'txt' ? 'chat' : 'file';
+}
+
+function sceneOf(v: unknown): Scene {
+  if (typeof v !== 'string' || !(SCENES as readonly string[]).includes(v)) throw new DomainError('INVALID_EVENT', `bad scene ${String(v)}`);
+  return v as Scene;
 }
 
 function checkExtracts(s: State, projectId: Id, body: { id: Id }[], xs: ExtractInput[], actorId: Id, privateTo: Id | null): Extract[] {
@@ -645,6 +653,7 @@ const handlers: Handlers = {
       id: p.inputId,
       projectId: p.projectId,
       kind: p.kind,
+      scene: p.scene === undefined ? null : sceneOf(p.scene),
       title: text(p.title, 'title'),
       from: requesterOf(s, p.from),
       date: date(p.date, 'date'),
@@ -658,6 +667,11 @@ const handlers: Handlers = {
     };
     s.inputs[input.id] = input;
     openConflictsFor(s, input, e);
+  },
+  'input.scene_set': (s, e) => {
+    const input = visible(s.inputs, e.payload.inputId, 'input', e.actorId);
+    requireMember(s, input.projectId, e.actorId);
+    input.scene = sceneOf(e.payload.scene);
   },
   'input.shared': (s, e) => {
     const p = e.payload;

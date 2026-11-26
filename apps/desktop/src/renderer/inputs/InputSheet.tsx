@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { noDots, SEP, type Id, type Input } from '@meetless/core';
+import { noDots, SCENES, SEP, type Id, type Input, type Scene } from '@meetless/core';
+import type { MessageKey } from '@meetless/i18n';
+import { sceneOf } from '../needs/lineage';
 import { useApp } from '../app/AppContext';
 import { Btn, FileKind } from '../ui/primitives';
 import { downloadBlob } from '../artifacts/blobs';
@@ -53,7 +55,7 @@ export function InputSheet({
   onShare: () => void;
   onShareNeedsFirst: () => void;
 }) {
-  const { live, me, t, fmtDay, bridge, notify, errorText } = useApp();
+  const { live, me, t, fmtDay, bridge, notify, errorText, submit } = useApp();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => scrollToPara(ref.current, paraId), [paraId]);
 
@@ -90,7 +92,20 @@ export function InputSheet({
             </>
           )}
         </div>
-        <div className="small faint">{fact}</div>
+        <div className="row gap6 wrap">
+          <span className="small faint">{fact}</span>
+          {/* The scene was detected on import; whoever sees the input can correct it. */}
+          <label className="small faint row gap6">
+            {t('in.scene')}
+            <select className="small" data-testid="in-scene" value={sceneOf(input)} onChange={(e) => void submit('input.scene_set', { inputId: input.id, scene: e.target.value as Scene })}>
+              {SCENES.map((sc) => (
+                <option key={sc} value={sc}>
+                  {t(`lin.type.${sc}` as MessageKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         {isDocFile && (
           <div className="row gap6 wrap">
             <span className="small faint">{t('in.preview')}</span>

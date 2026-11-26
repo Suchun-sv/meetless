@@ -153,7 +153,7 @@ export function inputTitleFrom(text: string): string {
 
 /** The import request for a typed or pasted chat message. */
 export function importCommand(a: { projectId: Id; messageId: Id; text: string; priv: boolean; today: IsoDate }): ApiRequest<'inputs.import'> {
-  return { projectId: a.projectId, inputId: `in-${a.messageId}`, title: inputTitleFrom(a.text), kind: 'md', blobHash: null, text: a.text, from: null, date: a.today, private: a.priv };
+  return { projectId: a.projectId, inputId: `in-${a.messageId}`, title: inputTitleFrom(a.text), kind: 'md', blobHash: null, text: a.text, from: null, date: a.today, private: a.priv, scene: 'agent' };
 }
 
 /**

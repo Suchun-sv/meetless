@@ -22,6 +22,7 @@ import type {
   WorkEffect,
   WorkItem,
   Input,
+  Scene,
 } from './types';
 
 export interface ExtractInput {
@@ -120,8 +121,12 @@ export interface EventPayloads {
     extracts: ExtractInput[];
     detector: string;
     private?: boolean;
+    /** Detected from the text on import (`detectScene`). */
+    scene?: Scene;
   };
   'input.shared': { inputId: Id; snapshot?: { input: Input } };
+  /** The input's scene, changed by hand. */
+  'input.scene_set': { inputId: Id; scene: Scene };
   /** Accepting a new/hyp extract creates the need `needId`; a revision revises its target. */
   'extract.accepted': { inputId: Id; extractId: Id; needId?: Id; roundId?: Id | null };
   'extract.ignored': { inputId: Id; extractId: Id };
