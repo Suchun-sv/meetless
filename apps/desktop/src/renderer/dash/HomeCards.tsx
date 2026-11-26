@@ -10,6 +10,7 @@ import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import { displayName } from '../model/state';
 import { Avatar, Btn, NeedChip, Pill, RulesMark, Status } from '../ui/primitives';
+import { ProjectsTimeline } from '../ui/Timeline';
 import { riskTone } from '../ui/tone';
 import { confirmRows, leftText, mineRows, projectTag, riskText } from './model';
 import { Bar, rowButton } from './parts';
@@ -214,6 +215,8 @@ function AllRisks() {
 /** One Home card's body, by id (`HOME_CARDS`). */
 export function HomeCard({ id }: { id: CardId }) {
   switch (id) {
+    case 'timeline':
+      return <ProjectsTimeline />;
     case 'projects':
       return <Projects />;
     case 'toMe':

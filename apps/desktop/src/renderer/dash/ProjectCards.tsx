@@ -1,9 +1,11 @@
 import {
   activityCard,
+  currentRound,
   deliveryCard,
   hypothesesCard,
   membersCard,
   progressCard,
+  projectRounds,
   riskList,
   sourcesCard,
   weeklyCard,
@@ -16,6 +18,7 @@ import type { MessageKey } from '@meetless/i18n';
 import { useApp } from '../app/AppContext';
 import { displayName } from '../model/state';
 import { Avatar, NeedChip, Status } from '../ui/primitives';
+import { Timeline } from '../ui/Timeline';
 import { riskTone } from '../ui/tone';
 import { leftText, riskTarget, riskText } from './model';
 import { Bar, CardEmpty, rowButton } from './parts';
@@ -224,9 +227,19 @@ function Weekly({ projectId }: { projectId: Id }) {
   );
 }
 
+/** The project's rounds with the today line, the current round marked; a round opens Deliveries at it. */
+function RoundsCard({ projectId }: { projectId: Id }) {
+  const { live, go, t } = useApp();
+  const cur = currentRound(live, projectId);
+  if (projectRounds(live, projectId).length === 0) return <p className="muted small">{t('dl.noRounds')}</p>;
+  return <Timeline projectId={projectId} selected={cur?.n ?? null} onSelect={(n) => go({ view: 'deliveries', projectId, ...(n !== null ? { round: n } : cur ? { round: cur.n } : {}) })} />;
+}
+
 /** One project dashboard card's body, by id. Home-only card ids never reach this (`ProjectDashPage` only ever asks for `PROJECT_CARDS`). */
 export function ProjectCard({ id, projectId }: { id: CardId; projectId: Id }) {
   switch (id) {
+    case 'timeline':
+      return <RoundsCard projectId={projectId} />;
     case 'progress':
       return <Progress projectId={projectId} />;
     case 'risks':

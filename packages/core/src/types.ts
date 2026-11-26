@@ -354,15 +354,15 @@ export interface Artifact {
   seq: Seq;
 }
 
-export const PROJECT_CARDS = ['progress', 'risks', 'members', 'delivery', 'hyps', 'activity', 'sources', 'weekly'] as const;
-export const HOME_CARDS = ['projects', 'toMe', 'confirm', 'byMe', 'mine', 'due', 'allRisks'] as const;
+export const PROJECT_CARDS = ['timeline', 'progress', 'risks', 'members', 'delivery', 'hyps', 'activity', 'sources', 'weekly'] as const;
+export const HOME_CARDS = ['timeline', 'projects', 'toMe', 'confirm', 'byMe', 'mine', 'due', 'allRisks'] as const;
 export type ProjectCard = (typeof PROJECT_CARDS)[number];
 export type HomeCard = (typeof HOME_CARDS)[number];
 export type CardId = ProjectCard | HomeCard;
-export const DEFAULT_PROJECT_CARDS: readonly ProjectCard[] = ['progress', 'risks', 'members', 'delivery', 'hyps', 'activity'];
-export const DEFAULT_HOME_CARDS: readonly HomeCard[] = ['projects', 'toMe', 'confirm', 'byMe', 'mine', 'due'];
+export const DEFAULT_PROJECT_CARDS: readonly ProjectCard[] = ['timeline', 'progress', 'risks', 'members', 'delivery', 'hyps', 'activity'];
+export const DEFAULT_HOME_CARDS: readonly HomeCard[] = ['timeline', 'projects', 'toMe', 'confirm', 'byMe', 'mine', 'due'];
 /** Cards that take the full width. */
-export const WIDE_CARDS: ReadonlySet<CardId> = new Set<CardId>(['members', 'activity', 'projects']);
+export const WIDE_CARDS: ReadonlySet<CardId> = new Set<CardId>(['timeline', 'members', 'activity', 'projects']);
 
 /** One user's card set for one scope ('home' or a project id). Always private to that user. */
 export interface DashboardConfig {

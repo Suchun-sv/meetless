@@ -62,6 +62,8 @@ const sharedWork = (w: WorkItem) => w.privateTo === null && !w.capture && !w.ign
 
 export function cardsFor(s: State, userId: Id, scope: Id): { cards: CardId[]; refreshed: Record<string, string> } {
   const d = s.dashboards[dashboardKey(userId, scope)];
+  // The timeline came later: a set saved before it gets it once, at the top, unless it was removed (its stamp stays then).
+  if (d && !d.cards.includes('timeline') && !Object.hasOwn(d.refreshed, 'timeline')) return { cards: ['timeline', ...d.cards], refreshed: d.refreshed };
   if (d) return { cards: d.cards, refreshed: d.refreshed };
   return { cards: [...(scope === 'home' ? DEFAULT_HOME_CARDS : DEFAULT_PROJECT_CARDS)], refreshed: {} };
 }
@@ -231,6 +233,7 @@ export function allRisks(s: State, userId: Id, today: string): Risk[] {
 // ---------------------------------------------------------------- rule-based card selection
 
 const CARD_WORDS: [CardId, RegExp][] = [
+  ['timeline', /时间线|甘特|排期|timeline|gantt|schedule/i],
   ['sources', /来源|从哪|source|where.*come/i],
   ['weekly', /本周|这周|谁做|week/i],
   ['members', /成员|岗位|角色|member|role|people/i],

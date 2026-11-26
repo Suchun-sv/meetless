@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { projectRounds } from '@meetless/core';
 import type { PageProps } from '../app/pages';
 import { useApp } from '../app/AppContext';
@@ -16,7 +16,10 @@ import './deliveries.css';
  */
 export function DeliveriesPage({ composer }: PageProps) {
   const { live, route, t, go } = useApp();
-  const [selected, setSelected] = useState<number | null>(null);
+  const asked = route.view === 'deliveries' ? (route.round ?? null) : null;
+  const [selected, setSelected] = useState<number | null>(asked);
+  // Opened at a round (a dashboard timeline click): that round is the one shown.
+  useEffect(() => setSelected(asked), [asked]);
   if (route.view !== 'deliveries') return null;
   const { projectId } = route;
   const rounds = projectRounds(live, projectId);

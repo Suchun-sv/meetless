@@ -31,6 +31,8 @@ export function addCardPayload(cur: { cards: CardId[]; refreshed: Record<string,
 /** The `dashboard.set` payload for dropping `card` from `cur`'s card set, and its stamp with it. */
 export function removeCardPayload(cur: { cards: CardId[]; refreshed: Record<string, string> }, scope: Id, card: CardId): DashSet {
   const { [card]: _dropped, ...refreshed } = cur.refreshed;
+  // The timeline keeps its stamp when removed, so `cardsFor` does not add it back to the set.
+  if (card === 'timeline') refreshed.timeline = cur.refreshed.timeline ?? new Date().toISOString();
   return { scope, cards: cur.cards.filter((c) => c !== card), refreshed };
 }
 

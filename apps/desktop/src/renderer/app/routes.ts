@@ -8,11 +8,11 @@ export type View = GlobalView | ProjectView;
 /**
  * `focusId` selects an input or artifact in the three-pane pages. On `artifacts`, `versionId` and `page`
  * (zero-based, an index into the version's `derived.texts`) open that version at that page; on `inputs`,
- * `paraId` scrolls to that paragraph. Pages ignore what does not apply to them.
+ * `paraId` scrolls to that paragraph; on `deliveries`, `round` selects that round. Pages ignore what does not apply to them.
  */
 export type Route =
   | { view: GlobalView }
-  | { view: ProjectView; projectId: Id; needId?: Id | null; focusId?: Id | null; versionId?: Id; page?: number; paraId?: Id };
+  | { view: ProjectView; projectId: Id; needId?: Id | null; focusId?: Id | null; versionId?: Id; page?: number; paraId?: Id; round?: number };
 
 export const GLOBAL_VIEWS: readonly GlobalView[] = ['home', 'agents', 'newProject'];
 export const PROJECT_VIEWS: readonly ProjectView[] = ['dash', 'board', 'inputs', 'artifacts', 'stream', 'deliveries', 'members', 'rounds'];
