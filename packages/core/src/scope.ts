@@ -37,6 +37,8 @@ export function eventScope(s: State, e: DomainEvent): EventScope {
     case 'project.created':
     case 'project.member_added':
     case 'project.renamed':
+    case 'project.archived':
+    case 'project.unarchived':
     case 'role.created':
     case 'round.created':
     case 'handoff.created':

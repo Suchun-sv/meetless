@@ -148,10 +148,10 @@ export function questionId(q: Question): string {
 /** Not started. A parked hypothesis has been set aside on purpose, so it is not stale. */
 const STALE_STATUSES: ReadonlySet<NeedStatus> = new Set<NeedStatus>(['todo', 'untested']);
 
-/** Projects in creation order, all of them (null) or just one. */
+/** Projects in creation order: one when named (archived or not), else all that are not archived. */
 function projectsIn(s: State, projectId: Id | null): Id[] {
   return Object.values(s.projects)
-    .filter((p) => projectId === null || p.id === projectId)
+    .filter((p) => (projectId === null ? !p.archived : p.id === projectId))
     .sort((a, b) => a.createdSeq - b.createdSeq)
     .map((p) => p.id);
 }

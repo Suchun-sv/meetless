@@ -36,6 +36,13 @@ export interface Project {
   nextCode: { ext: number; hyp: number };
   /** Every `project.renamed`, oldest first; Activity shows each as a system line. */
   renames: ProjectRename[];
+  /**
+   * Archived by a member (`project.archived`, undone by `project.unarchived`): still fully readable,
+   * but left out of the project tree, Home and its reminders unless asked for (`includeArchived`).
+   */
+  archived: boolean;
+  archivedAt: IsoTime | null;
+  archivedBy: Id | null;
 }
 
 /** One `project.renamed`: the name before and after (cleaned), who renamed it, and when. */

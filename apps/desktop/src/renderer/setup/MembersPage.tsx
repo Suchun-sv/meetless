@@ -15,7 +15,7 @@ import './setup.css';
  * `composer()` would otherwise render one for any view that has a `projectId`).
  */
 export function MembersPage(_props: PageProps) {
-  const { route, live, me, t, submit } = useApp();
+  const { route, live, me, t, submit, go } = useApp();
   const [pickUser, setPickUser] = useState('');
   const [pickRole, setPickRole] = useState('');
   const [roleName, setRoleName] = useState('');
@@ -164,6 +164,27 @@ export function MembersPage(_props: PageProps) {
       <p className="small muted">{t('pj.rolesNote')}</p>
 
       <Invites projectId={projectId} />
+
+      {/* Archive: off the tree and Home, still readable under 「已归档」; nothing is deleted. */}
+      <div className="row gap6 wrap">
+        {live.projects[projectId]?.archived ? (
+          <Btn testId="project-restore-here" onClick={() => void submit('project.unarchived', { projectId })}>
+            {t('pj.restore')}
+          </Btn>
+        ) : (
+          <Btn
+            testId="project-archive"
+            onClick={() =>
+              void submit('project.archived', { projectId }).then((r) => {
+                if (r.kind !== 'rejected') go({ view: 'home' });
+              })
+            }
+          >
+            {t('pj.archive')}
+          </Btn>
+        )}
+        <span className="small muted">{t('pj.archiveNote')}</span>
+      </div>
     </div>
   );
 }

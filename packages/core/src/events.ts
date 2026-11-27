@@ -56,6 +56,9 @@ export interface EventPayloads {
   'project.member_added': { projectId: Id; userId: Id };
   /** Any member renames the project. The name is cleaned with `noDots`, trimmed, and must be 1 to 80 characters (code points). */
   'project.renamed': { projectId: Id; name: string };
+  /** Any member may archive a project or bring it back; nothing is deleted. */
+  'project.archived': { projectId: Id };
+  'project.unarchived': { projectId: Id };
   'role.created': { roleId: Id; projectId: Id; name: string };
   'role.member_assigned': { roleId: Id; userId: Id };
   'role.member_removed': { roleId: Id; userId: Id };

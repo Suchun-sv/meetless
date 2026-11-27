@@ -390,6 +390,9 @@ const handlers: Handlers = {
       sample: p.sample === true,
       nextCode: { ext: 1, hyp: 1 },
       renames: [],
+      archived: false,
+      archivedAt: null,
+      archivedBy: null,
     };
   },
   'project.member_added': (s, e) => {
@@ -403,6 +406,20 @@ const handlers: Handlers = {
     const name = projectName(e.payload.name);
     p.renames.push({ from: p.name, to: name, by: e.actorId, at: e.recordedAt, seq: e.seq });
     p.name = name;
+  },
+  'project.archived': (s, e) => {
+    const p = requireMember(s, e.payload.projectId, e.actorId);
+    if (p.archived) throw new DomainError('ALREADY_DECIDED', `project ${p.id} is archived`);
+    p.archived = true;
+    p.archivedAt = e.recordedAt;
+    p.archivedBy = e.actorId;
+  },
+  'project.unarchived': (s, e) => {
+    const p = requireMember(s, e.payload.projectId, e.actorId);
+    if (!p.archived) throw new DomainError('ALREADY_DECIDED', `project ${p.id} is not archived`);
+    p.archived = false;
+    p.archivedAt = null;
+    p.archivedBy = null;
   },
   'role.created': (s, e) => {
     const p = e.payload;

@@ -19,6 +19,8 @@ export interface SidebarProject {
 export interface SidebarModel {
   homeCount: number;
   projects: SidebarProject[];
+  /** Archived projects (the 「已归档」 group at the bottom of the tree), oldest first. */
+  archived: { id: Id; name: string }[];
   anySample: boolean;
 }
 
@@ -37,7 +39,10 @@ export function sidebarModel(s: State, me: Id, route: Route, today: IsoDate): Si
     if (b.inputs > 0) badges.inputs = b.inputs;
     return { id, name: p.name, sample: p.sample, open: id === currentId, total: b.total, badges, memberIds: membersOf(s, id) };
   });
-  return { homeCount: waitingCount(s, me, today), projects, anySample: projects.some((p) => p.sample) };
+  const archived = myProjectIds(s, me, { includeArchived: true })
+    .filter((id) => s.projects[id]!.archived)
+    .map((id) => ({ id, name: s.projects[id]!.name }));
+  return { homeCount: waitingCount(s, me, today), projects, archived, anySample: projects.some((p) => p.sample) };
 }
 
 /** The top bar (needs3/ui.jsx `Sidebar` project crumb): project views show the name, members and

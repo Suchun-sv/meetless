@@ -24,7 +24,7 @@ export const LANG_LABEL: Record<Locale, string> = { 'zh-CN': '中', en: 'EN' };
  */
 export function Sidebar({ lastProjectId = null }: { lastProjectId?: Id | null } = {}) {
   const app = useApp();
-  const { live, me, today, route, go, t, locale, setLocale, bridge } = app;
+  const { live, me, today, route, go, t, locale, setLocale, bridge, submit } = app;
   const model = sidebarModel(live, me, route, today);
   const [renaming, setRenaming] = useState<Id | null>(null);
   const onNew = () => {
@@ -98,6 +98,21 @@ export function Sidebar({ lastProjectId = null }: { lastProjectId?: Id | null } 
           )}
         </div>
       ))}
+      {model.archived.length > 0 && (
+        <details className="side-arch" data-testid="side-archived">
+          <summary className="side-label">{t('pj.archivedGroup', { n: model.archived.length })}</summary>
+          {model.archived.map((p) => (
+            <div key={p.id} className="side-arch-row">
+              <button type="button" className="nav sub" data-testid="nav-archived-project" onClick={() => go({ view: 'dash', projectId: p.id })}>
+                <span className="proj-n">{p.name}</span>
+              </button>
+              <button type="button" className="link small" data-testid="project-restore" onClick={() => void submit('project.unarchived', { projectId: p.id })}>
+                {t('pj.restore')}
+              </button>
+            </div>
+          ))}
+        </details>
+      )}
       <div className="grow" />
       <button type="button" className={`nav${route.view === 'agents' ? ' on' : ''}`} data-testid="nav-agents" onClick={() => go({ view: 'agents' })}>
         <span>{t('nav.agents')}</span>

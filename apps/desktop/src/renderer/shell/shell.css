@@ -107,3 +107,8 @@
   .ask-btn{height:var(--touch-min);flex:none}
   .statusbar{padding:var(--space-1) var(--space-4) calc(var(--space-1) + var(--safe-bottom))}
 }
+
+/* Archived projects: a small collapsible group at the bottom of the tree, each with 「恢复」. */
+.side-arch summary{cursor:pointer;list-style-position:inside}
+.side-arch-row{display:flex;align-items:center;gap:var(--space-2);padding-right:var(--space-2)}
+.side-arch-row .nav{flex:1;min-width:0}

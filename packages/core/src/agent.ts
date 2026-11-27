@@ -117,7 +117,8 @@ function memberIn(view: State, projectId: Id, userId: Id, text: string): Id | nu
   return best?.id ?? null;
 }
 
-const memberProjects = (view: State, userId: Id) => Object.values(view.projects).filter((p) => p.memberIds.includes(userId)).map((p) => p.id);
+/** The user's projects the Home agent speaks for: archived ones are left out. */
+const memberProjects = (view: State, userId: Id) => Object.values(view.projects).filter((p) => p.memberIds.includes(userId) && !p.archived).map((p) => p.id);
 
 /**
  * Text in a project that looks like content to add rather than a question: several lines, more

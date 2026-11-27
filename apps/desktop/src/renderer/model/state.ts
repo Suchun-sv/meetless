@@ -50,8 +50,8 @@ export function initials(name: string): string {
 }
 
 /** The projects the user is a member of, oldest first. */
-export function myProjects(s: State, userId: Id): Project[] {
+export function myProjects(s: State, userId: Id, opts: { includeArchived?: boolean } = {}): Project[] {
   return Object.values(s.projects)
-    .filter((p) => p.memberIds.includes(userId))
+    .filter((p) => p.memberIds.includes(userId) && (opts.includeArchived === true || !p.archived))
     .sort((a, b) => a.createdSeq - b.createdSeq);
 }

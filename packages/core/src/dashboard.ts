@@ -182,9 +182,10 @@ export interface HomeItems {
   due: { projectId: Id; roundId: Id; daysLeft: number }[];
 }
 
-export function myProjectIds(s: State, userId: Id): Id[] {
+/** The user's projects, oldest first; archived ones only with `includeArchived` (the tree, Home and reminders leave them out). */
+export function myProjectIds(s: State, userId: Id, opts: { includeArchived?: boolean } = {}): Id[] {
   return Object.values(s.projects)
-    .filter((p) => p.memberIds.includes(userId))
+    .filter((p) => p.memberIds.includes(userId) && (opts.includeArchived === true || !p.archived))
     .sort((a, b) => a.createdSeq - b.createdSeq)
     .map((p) => p.id);
 }
