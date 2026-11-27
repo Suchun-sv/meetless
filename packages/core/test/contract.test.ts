@@ -33,7 +33,7 @@ const FROZEN_EXPORTS = [
   'allRisks', 'answer', 'applyEvent', 'cardFromText', 'cardsFor',
   'chatMessages', 'clip', 'codesIn', 'contextVersionOf', 'currentOrLatestRound',
   'currentRound', 'cutoffSeqAtTime', 'dashboardKey', 'daysBetween', 'daysLeft',
-  'deliveryCard', 'detectExtracts', 'detectScene', 'emptyState', 'eventScope', 'groupByNeed',
+  'deadlineWindow', 'deliveryCard', 'detectExtracts', 'detectScene', 'emptyState', 'eventScope', 'groupByNeed',
   'handoffForNeed', 'handoffStaleness', 'homeItems', 'hypothesesCard', 'inputStatus',
   'isDomainError', 'isFreeQuestion', 'isOpen', 'isProgress', 'isSystemActor', 'isWebUrl', 'lastFetchedVersion',
   'looksLikeAdd', 'looksLikeInput', 'looksLikeQuestion', 'matchNeed', 'materialHits', 'membersCard', 'membersOf', 'myProjectIds',

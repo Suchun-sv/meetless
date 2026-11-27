@@ -156,7 +156,7 @@ export function Reply({ reply, scope, messageId }: ReplyProps) {
     }
 
     case 'deadlines': {
-      if (a.items.length === 0) return <div>{t('common.none')}</div>;
+      if (a.items.length === 0) return <div>{t('ans.deadlinesNone')}</div>;
       return (
         <>
           <div>{t('ans.deadlines')}</div>
@@ -166,7 +166,7 @@ export function Reply({ reply, scope, messageId }: ReplyProps) {
             const left = it.daysLeft >= 0 ? t('round.left', { n: it.daysLeft }) : t('round.over', { n: -it.daysLeft });
             return (
               <div key={i} className="small">
-                {t('ans.deadline', { p, round: t('round', { n: round?.n ?? 0 }), d: round ? fmtDay(round.due) : '', left })}
+                {t('ans.deadline', { p, round: round?.title || t('round', { n: round?.n ?? 0 }), d: round ? fmtDay(round.due) : '', left })}
               </div>
             );
           })}

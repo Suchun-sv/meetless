@@ -1,6 +1,6 @@
-import { cardFromText, homeItems, weeklyCard } from './dashboard';
+import { cardFromText, homeItems, myProjectIds, weeklyCard } from './dashboard';
 import { currentRound } from './reducer';
-import { handoffStaleness, membersOf, needByCode, projectNeeds, questionId, questions, toConfirm } from './queries';
+import { handoffStaleness, membersOf, needByCode, projectNeeds, projectRounds, questionId, questions, toConfirm } from './queries';
 import { looksLikeAdd, looksLikeQuestion } from './detect';
 import { groupByNeed, materialHits, search, type SearchHit } from './search';
 import { codesIn, daysBetween, tokens } from './text';
@@ -92,7 +92,23 @@ export interface ProjectAgentProvider {
 
 const TODAY = /先做|先干|今天|优先|first|today|priorit|waiting on me|等我/i;
 const DEADLINE = /截止|到期|期限|deadline|due date|\bdue\b/i;
-const WEEKLY = /本周|这周|周报|this week|weekly|by person|各岗位|by role/i;
+// Progress by person: 「本周」 alone is not enough (「本周有哪些截止」 asks about deadlines).
+const WEEKLY = /周报|进展|进度|谁做了|做了什么|干了什么|by person|各岗位|by role|weekly|who did what|what did .{0,40}\bdo\b|progress/i;
+
+/** The window a deadlines question names: this week (from today), next week, the coming two weeks, this month; null for none. */
+export function deadlineWindow(text: string, today: string): { from: string; to: string } | null {
+  const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const t = Date.parse(`${today}T12:00:00Z`);
+  const mon = t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000;
+  if (/下周|下个星期|下星期|next week/i.test(text)) return { from: day(mon + 7 * 86_400_000), to: day(mon + 13 * 86_400_000) };
+  if (/本周|这周|本星期|这个星期|this week/i.test(text)) return { from: today, to: day(mon + 6 * 86_400_000) };
+  if (/本月|这个月|this month/i.test(text)) {
+    const d = new Date(t);
+    return { from: today, to: day(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 12)) };
+  }
+  if (/最近|近期|接下来|马上|upcoming|soon|coming/i.test(text)) return { from: today, to: day(t + 14 * 86_400_000) };
+  return null;
+}
 const DELIVERY = /交付说明|交付草稿|delivery note|release note/i;
 // 交给我 / 转给我 is about what was handed to the asker, not a handoff to make.
 const HANDOFF = /交给(?!我)|转给(?!我)|\bhand(?:\s+(?:it|this))?\s+(?:off|over)\s+to\b|\bhand\s+(?:\S+\s+)?(?:over\s+)?to\b|\bassign\s+to\b/i;
@@ -196,6 +212,20 @@ export function answer(view: State, req: AgentRequest): AgentReply {
     return reply({ intent: 'stale', items, cites: [...new Set(items.map((i) => i.needId))] });
   }
 
+  // Deadlines before the weekly and today intents: 「本周有哪些截止」 lists the open DDLs in that window.
+  if (DEADLINE.test(text) || /\bddl\b/i.test(text)) {
+    const win = deadlineWindow(text, today);
+    if (!win) {
+      const items = homeItems(view, userId, today).due.filter((d) => !projectId || d.projectId === projectId);
+      return reply({ intent: 'deadlines', items, cites: [] });
+    }
+    const pids = projectId ? [projectId] : myProjectIds(view, userId);
+    const items = pids
+      .flatMap((pid) => projectRounds(view, pid).filter((r) => r.status !== 'delivered' && r.due >= win.from && r.due <= win.to))
+      .sort((a, b) => a.due.localeCompare(b.due))
+      .map((r) => ({ projectId: r.projectId, roundId: r.id, daysLeft: daysBetween(today, r.due) }));
+    return reply({ intent: 'deadlines', items, cites: items.map((i) => i.roundId) });
+  }
   if (DELIVERY.test(text) && projectId) {
     const r = currentRound(view, projectId);
     const lines = projectNeeds(view, projectId)
@@ -234,10 +264,6 @@ export function answer(view: State, req: AgentRequest): AgentReply {
     const rank = { conflict: 0, toMe: 1, stale: 2, proposal: 3, confirm: 3, mine: 4 } as const;
     items.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.daysLeft ?? 99) - (b.daysLeft ?? 99));
     return reply({ intent: 'today', items: items.slice(0, 6), cites: items.slice(0, 6).flatMap((i) => (i.needId ? [i.needId] : [])) });
-  }
-  if (DEADLINE.test(text)) {
-    const items = homeItems(view, userId, today).due.filter((d) => !projectId || d.projectId === projectId);
-    return reply({ intent: 'deadlines', items, cites: [] });
   }
 
   const hits = search(view, { text, projectId, limit: 30 });

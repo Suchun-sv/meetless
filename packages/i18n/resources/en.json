@@ -452,6 +452,7 @@
   "ans.today.confirm": "Review an item in To confirm",
   "ans.deadlines": "Deadlines:",
   "ans.deadline": "{p}: {round}, {d} ({left})",
+  "ans.deadlinesNone": "No deadlines in that window.",
   "ans.weekly": "This week:",
   "ans.weeklyRow": "{who}: {n} updates, latest “{text}”",
   "ans.weeklyNone": "No activity this week.",

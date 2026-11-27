@@ -452,6 +452,7 @@
   "ans.today.confirm": "处理一项待确认",
   "ans.deadlines": "截止日：",
   "ans.deadline": "{p}：{round}，{d}（{left}）",
+  "ans.deadlinesNone": "这段时间没有截止。",
   "ans.weekly": "本周进展：",
   "ans.weeklyRow": "{who}：{n} 条，最近「{text}」",
   "ans.weeklyNone": "本周还没有动态。",
