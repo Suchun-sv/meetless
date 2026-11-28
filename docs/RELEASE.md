@@ -7,7 +7,7 @@ app reads. The workflow and the updater are adapted from Gleeok's.
 ## Cut a release
 
 1. Pick the version, `X.Y.Z`. The workflow takes it from the tag, so `apps/desktop/package.json`
-   only needs bumping when the repo itself should show it (it is `0.1.6` now).
+   only needs bumping when the repo itself should show it (it is `0.2.0` now).
 2. Tag the commit and push the tag:
 
    ```sh
@@ -130,7 +130,7 @@ reaches it only through two bridge calls, `updatesCheck()` and `updatesInstall()
 Every push to `main` of the public repo runs `.github/workflows/beta.yml`. It builds the app code alone
 (no Electron), packs it with `apps/desktop/scripts/hot-pack.mjs` and uploads `hot-<commit>.zip` and
 `hot.json` to the rolling `hot` prerelease (the app falls back to the old `beta` one). `hot.json` is signed with Ed25519 by the `HOT_SIGNING_KEY`
-secret (`~/work/meetless-signing/hot-ed25519.key` on the dev server; the public key is in
+secret (`~/work/meetless-signing/hot-ed25519.key` on the build machine; the public key is in
 `apps/desktop/src/main/hot-update.ts`). Installed builds check it on start and every 15 minutes, and take
 it only when the signature, the shell (Electron version, ABI and fuses), the SHA-512, the size and the zip
 entries check out. Checking and downloading run in the background (hot and full releases); a callout in the sidebar offers the

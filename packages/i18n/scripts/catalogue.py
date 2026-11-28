@@ -714,6 +714,12 @@ k('upd.err.UPDATE_NONE', '没有找到新版本', 'no newer version found')
 k('upd.err.UPDATE_MANUAL', '这种安装方式需要手动下载', 'this install type needs a manual download')
 k('upd.err.UPDATE_FAILED', '安装没有完成', 'the install did not finish')
 
+# === A1 (expo): iOS local deadline reminders
+k('rem.roundTomorrow', '「{round}」明天截止', '{round} is due tomorrow')
+k('rem.roundToday', '「{round}」今天截止', '{round} is due today')
+k('rem.handoffTomorrow', '{need} 明天到期', '{need} is due tomorrow')
+k('rem.handoffToday', '{need} 今天到期', '{need} is due today')
+
 DOTS = re.compile('[·•∙⋅●・‧◦⦁⸱･]')
 zh = OrderedDict(); en = OrderedDict()
 for key, (z, e) in T.items():

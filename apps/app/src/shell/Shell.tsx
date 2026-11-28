@@ -1,0 +1,60 @@
+import type { ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Redirect, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, layout, useLayout } from '@/theme';
+import { Notices } from '@/components/ui';
+import { ChatDock } from '@/slots/ChatDock';
+import { ReminderSync } from '@/features/reminders/ui/sync';
+import { PhoneHeader, phoneHeaderKind } from './PhoneHeader';
+import { Sidebar } from './Sidebar';
+import { TabBar } from './TabBar';
+import { Topbar } from './Topbar';
+
+/** Wide screens: sidebar plus content (unchanged). Phones: mobile-v1, tab bar and per-page headers, no drawer. */
+export function Shell({ children }: { children: ReactNode }) {
+  const { phone } = useLayout();
+  const insets = useSafeAreaInsets();
+  const path = usePathname();
+
+  if (!phone) {
+    return (
+      <View style={styles.row}>
+        <ReminderSync />
+        <View style={styles.sidebar}>
+          <Sidebar />
+        </View>
+        <View style={styles.main}>
+          <Topbar />
+          <View style={styles.content}>{children}</View>
+          <ChatDock />
+        </View>
+        <Notices />
+      </View>
+    );
+  }
+
+  // Phones (mobile-v1): a header per page, the content, the Agent ask bar (A3's ChatDock) on 我的 and
+  // the project segments, and the tab bar. The bars sit in the layout flow, so pages are never covered.
+  const kind = phoneHeaderKind(path);
+  // The wide 看板 (/p/:pid) has no phone segment: phones open the project on 需求.
+  const bare = /^\/p\/([^/]+)\/?$/.exec(path);
+  if (bare) return <Redirect href={`/p/${bare[1]}/board`} />;
+  return (
+    <View style={[styles.main, { paddingTop: insets.top }]}>
+      <ReminderSync />
+      <PhoneHeader />
+      <View style={styles.content}>{children}</View>
+      {kind === 'mine' || kind === 'project' ? <ChatDock /> : null}
+      <TabBar />
+      <Notices bottom={56} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { flex: 1, flexDirection: 'row', backgroundColor: colors.bg },
+  sidebar: { width: layout.sidebar, borderRightWidth: 1, borderRightColor: colors.border },
+  main: { flex: 1, backgroundColor: colors.bg },
+  content: { flex: 1 },
+});

@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Meetless",
+    "slug": "meetless",
+    "scheme": "meetless",
+    "version": "0.2.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FBFBFA",
+    "ios": {
+      "bundleIdentifier": "app.meetless.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "zh-Hans",
+        "CFBundleLocalizations": [
+          "zh-Hans",
+          "en"
+        ]
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Meetless",
+      "backgroundColor": "#FBFBFA"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "tsconfigPaths": true
+    }
+  }
+}

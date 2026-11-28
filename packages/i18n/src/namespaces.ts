@@ -33,6 +33,16 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   upd: 'base',
   // web and phone (design 2026-11-25)
   web: 'base',
+  // Expo app shell (apps/app, P0). Expo page agents add their own namespaces next to it.
+  xp: 'base',
+  // A3 (chat, import, handoff, lineage pages)
+  imp: 'U3',
+  hx: 'U2',
+  lnv: 'U2',
+  dock: 'U1',
+  // Expo A4 (search, settings)
+  search: 'base',
+  set: 'base',
   // S (server) — new; only if the server needs user-visible text
   srv: 'S',
   // U1 (shell and dashboards)
@@ -55,6 +65,7 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   mine: 'U1',
   ag: 'U1',
   inv: 'U1',
+  rem: 'U1',
   // U2 (needs and collaboration)
   board: 'U2',
   nn: 'U2',
@@ -71,6 +82,9 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   cf: 'U2',
   pr: 'U2',
   lin: 'U2',
+  // A2 (Expo needs and To confirm)
+  need: 'U2',
+  cfm: 'U2',
   // U3 (inputs and artifacts)
   in: 'U3',
   af: 'U3',

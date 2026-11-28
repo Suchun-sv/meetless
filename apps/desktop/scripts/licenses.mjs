@@ -27,7 +27,7 @@ function findPkg(name, fromDir) {
 
 const readPkg = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
 
-/** Every package the app ships: the main and preload bundles' inputs, plus the runtime dependency tree (the renderer). */
+/** Every package the app ships: the main and preload bundles' inputs, the Expo renderer's bundled packages, plus the runtime dependency tree. */
 export function bundledPackages(desktop) {
   const dirs = new Set();
   for (const name of ['main', 'preload']) {
@@ -38,6 +38,9 @@ export function bundledPackages(desktop) {
       if (root && existsSync(join(root, 'package.json'))) dirs.add(realpathSync(root));
     }
   }
+  // The Expo renderer: the exact package set from its export (build-renderer.mjs, apps/app/scripts/notices.mjs).
+  const renderer = join(desktop, 'dist/meta/renderer-packages.json');
+  if (existsSync(renderer)) for (const d of JSON.parse(readFileSync(renderer, 'utf8'))) if (existsSync(join(d, 'package.json'))) dirs.add(realpathSync(d));
   const seen = new Set();
   const walk = (dir) => {
     if (seen.has(dir)) return;

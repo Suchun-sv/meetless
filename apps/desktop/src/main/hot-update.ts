@@ -19,6 +19,9 @@ import * as pick from '../boot/pick.cjs';
  *   under dist/ (no absolute paths, .., symlinks or special files).
  * The boot loader (src/boot/boot.cjs) then runs it on the next start. A change to the renderer
  * alone is applied sooner: the window reloads into the new renderer when the user is idle.
+ * The renderer is the Expo web export of apps/app (or the legacy Vite renderer in a
+ * MEETLESS_UI=legacy build); parts.renderer hashes every file of it, so a renderer-only change is
+ * one whose Expo bundle (content-hashed file names), index.html or assets changed and nothing else.
  */
 
 /** The public half of ~/work/meetless-signing/hot-ed25519.key (the HOT_SIGNING_KEY secret). */
@@ -239,6 +242,7 @@ export class HotUpdater {
       unzipTo(zip, part);
       const built = JSON.parse(readFileSync(join(part, 'dist', 'build.json'), 'utf8')) as BuildInfo;
       if (built.commit !== m.commit || !existsSync(join(part, 'dist', 'main', 'main.cjs'))) throw new HotError('the zip is not the manifest commit');
+      if (!existsSync(join(part, 'dist', 'preload', 'preload.cjs')) || !existsSync(join(part, 'dist', 'renderer', 'index.html'))) throw new HotError('the zip has no preload or renderer');
       writeFileSync(join(part, '.verified'), m.sha512);
       const dest = join(this.o.hotDir, m.commit);
       rmSync(dest, { recursive: true, force: true });

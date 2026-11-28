@@ -27,5 +27,8 @@ const parts = {
   preload: hashOf(['dist/preload/preload.cjs'], 'dist'),
   renderer: hashOf(files('dist/renderer'), 'dist'),
 };
-writeFileSync('dist/build.json', `${JSON.stringify({ commit, version: pkg.version, built: new Date().toISOString(), parts })}\n`);
-console.log(`dist/build.json: ${commit.slice(0, 12)} ${pkg.version}`);
+// Which UI dist/renderer holds (scripts/build-renderer.mjs). parts.renderer covers every file of it:
+// for Expo, the content-hashed bundle names in index.html, the bundle itself and the assets.
+const ui = statSync('dist/renderer/_expo', { throwIfNoEntry: false })?.isDirectory() ? 'expo' : 'legacy';
+writeFileSync('dist/build.json', `${JSON.stringify({ commit, version: pkg.version, built: new Date().toISOString(), ui, parts })}\n`);
+console.log(`dist/build.json: ${commit.slice(0, 12)} ${pkg.version} ${ui}`);

@@ -56,6 +56,8 @@ function pickHot(hotDir, bundledDir) {
   const ok =
     fs.existsSync(path.join(hotDir, commit, '.verified')) &&
     fs.existsSync(main) &&
+    fs.existsSync(path.join(dist, 'preload', 'preload.cjs')) &&
+    fs.existsSync(path.join(dist, 'renderer', 'index.html')) &&
     sameShell(readJson(path.join(dist, 'shell.json')), readJson(path.join(bundledDir, 'shell.json'))) &&
     build && bundled && Date.parse(build.built) > Date.parse(bundled.built);
   if (!ok) {

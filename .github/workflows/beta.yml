@@ -1,5 +1,5 @@
 # The beta channel: every push to main builds Meetless's app code alone (dist/: main, preload,
-# renderer; no Electron, no installers) into the rolling "hot" prerelease (the first tag, "beta", was frozen by an immutable release) as hot-<commit>.zip and a
+# renderer = the Expo web export of apps/app; no Electron, no installers) into the rolling "hot" prerelease (the first tag, "beta", was frozen by an immutable release) as hot-<commit>.zip and a
 # signed hot.json. Installed builds pick it up as a hot update (apps/desktop/src/main/hot-update.ts).
 name: Beta
 
@@ -40,6 +40,9 @@ jobs:
         working-directory: apps/desktop
         env:
           MEETLESS_COMMIT: ${{ github.sha }}
+          # The renderer is apps/app's Expo web export (scripts/build-renderer.mjs); legacy is the old Vite one.
+          MEETLESS_UI: expo
+          EXPO_NO_TELEMETRY: '1'
         run: pnpm run build
       - name: Previous hot build
         id: prev

@@ -20,3 +20,11 @@ const bridge: MeetlessBridge = {
 };
 
 contextBridge.exposeInMainWorld('meetless', bridge);
+
+// What this host can do beyond the network bridge, for UIs that run on the web too (the Expo app):
+// a button for one of these shows only when it is listed. Plain data, no functions.
+contextBridge.exposeInMainWorld('meetlessShell', {
+  host: 'electron',
+  platform: process.platform,
+  capabilities: ['localGit', 'overleafGit', 'notionMcp', 'pickDirectory', 'appUpdates', 'openLogs'],
+});

@@ -1,7 +1,7 @@
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, net, session, shell } from 'electron';
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from 'electron';
 import { isWebUrl } from '@meetless/core';
 import { BRIDGE_METHODS, ClientNode, createFileLog, type BridgeEvent, type BridgeMethod, type FileLog, type MeetlessBridge } from '@meetless/client';
 import { invokeChannel, PUSH_CHANNEL } from '../shared/ipc';
@@ -23,11 +23,30 @@ import { runSmokeChecks } from './smoke-checks';
  * - MEETLESS_LAUNCH_INACTIVE=1  show the window without activating the app (acceptance runs)
  * - MEETLESS_LOG_DIR            folder of the rotating diagnostics log; default app.getPath('logs')
  * - MEETLESS_LOG_FILE           also append the main-process log lines to this file
- * - MEETLESS_RENDERER_URL       dev only (ignored when packaged): load the renderer from the Vite dev server
+ * - MEETLESS_RENDERER_URL       dev only (ignored when packaged): load the renderer from a dev server (Vite, or Expo web)
  * - MEETLESS_UPDATE_BASE        dev only: look for releases here instead of GitHub (docs/RELEASE.md)
  */
 const SMOKE = process.env.MEETLESS_SMOKE === '1';
 const INACTIVE = process.env.MEETLESS_LAUNCH_INACTIVE === '1';
+
+/** The Expo renderer's origin (a privileged scheme served from dist/renderer, see runApp). */
+const APP_ORIGIN = 'app://meetless';
+/** The renderer's CSP, as in the legacy renderer's index.html (vite.config.ts) and scripts/build-renderer.mjs. */
+const RENDERER_CSP =
+  "default-src 'self'; script-src 'self' http://127.0.0.1:55435; frame-src 'self' http://127.0.0.1:55435; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*";
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+};
 
 /**
  * Diagnostics log: in the normal app always written (macOS: ~/Library/Logs/Meetless/main.log), rotating.
@@ -124,7 +143,7 @@ function runApp(): void {
   const rendererUrl = app.isPackaged ? undefined : process.env.MEETLESS_RENDERER_URL;
   const rendererOrigin = rendererUrl ? new URL(rendererUrl).origin : null;
   const ownPage = (url: string): boolean => {
-    if (!rendererOrigin) return url.startsWith('file://');
+    if (!rendererOrigin) return url.startsWith('file://') || url.startsWith(`${APP_ORIGIN}/`);
     try {
       return new URL(url).origin === rendererOrigin;
     } catch {
@@ -133,7 +152,64 @@ function runApp(): void {
   };
 
   /** The renderer to load: the bundled one, or a reload-only hot update's once it was applied. */
-  let rendererFile = join(__dirname, '../renderer/index.html');
+  let rendererDir = join(__dirname, '../renderer');
+  /**
+   * Which UI dist/renderer holds (MEETLESS_UI at build time, scripts/build-renderer.mjs): the Expo web
+   * export (apps/app, served on app://meetless with a single-page fallback, since its asset paths are
+   * absolute and Expo Router owns the path) or the legacy Vite renderer (file://).
+   */
+  const isExpo = (dir: string) => existsSync(join(dir, '_expo'));
+  // Expo Router web reads the route from the path, which file:// cannot carry: a standard, secure
+  // scheme of our own. Registered before 'ready'; served in whenReady below.
+  protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+  const serveRenderer = (req: Request): Response => {
+    const url = new URL(req.url);
+    if (url.host !== 'meetless') return new Response(null, { status: 404 });
+    const root = rendererDir;
+    let path: string;
+    try {
+      path = decodeURIComponent(url.pathname);
+    } catch {
+      return new Response(null, { status: 400 });
+    }
+    let file = normalize(join(root, path));
+    if (file !== root && !file.startsWith(root + sep)) return new Response(null, { status: 403 });
+    const isFile = (f: string) => {
+      try {
+        return statSync(f).isFile();
+      } catch {
+        return false;
+      }
+    };
+    if (!isFile(file)) {
+      // A missing asset is a 404; any other path is a route, which index.html renders.
+      if (/^\/(_expo|assets|fonts)\//.test(path) || extname(path)) return new Response(null, { status: 404 });
+      file = join(root, 'index.html');
+    }
+    const html = file.endsWith('.html');
+    return new Response(readFileSync(file), {
+      headers: {
+        'content-type': MIME[extname(file)] ?? 'application/octet-stream',
+        'cache-control': 'no-cache',
+        // The same policy as the meta tag the build puts in index.html.
+        ...(html ? { 'content-security-policy': RENDERER_CSP } : {}),
+      },
+    });
+  };
+  /** Loads the current renderer into `w`, on `route` when it is one for that UI (Expo: a path; legacy: the route object). */
+  const loadRenderer = async (w: BrowserWindow, route: unknown): Promise<void> => {
+    if (rendererUrl) return w.loadURL(rendererUrl);
+    if (isExpo(rendererDir)) {
+      let target = `${APP_ORIGIN}/`;
+      if (typeof route === 'string' && route.startsWith('/') && !route.startsWith('//')) {
+        const u = new URL(route, `${APP_ORIGIN}/`);
+        if (u.host === 'meetless') target = u.href;
+      }
+      return w.loadURL(target);
+    }
+    const legacyRoute = route && typeof route === 'object' ? route : null;
+    return w.loadFile(join(rendererDir, 'index.html'), legacyRoute ? { query: { route: JSON.stringify(legacyRoute) } } : undefined);
+  };
 
   async function createWindow(): Promise<void> {
     // After a silent hot-update relaunch: the window where it was, on the route it showed.
@@ -172,9 +248,10 @@ function runApp(): void {
     win.webContents.on('will-navigate', (e, url) => {
       if (!ownPage(url)) e.preventDefault();
     });
-    // OnlyOffice viewer (U3): sub-frames may load only the DocumentServer origin, or about:blank.
+    // OnlyOffice viewer (U3): sub-frames may load only the DocumentServer origin, about:blank, or the
+    // Expo renderer's own host page for it (apps/app/public/office-frame.html, which has no bridge).
     win.webContents.on('will-frame-navigate', (e) => {
-      if (!e.isMainFrame && !(e.url.startsWith('http://127.0.0.1:55435/') || e.url === 'about:blank')) e.preventDefault();
+      if (!e.isMainFrame && !(e.url.startsWith('http://127.0.0.1:55435/') || e.url === 'about:blank' || e.url === `${APP_ORIGIN}/office-frame.html`)) e.preventDefault();
     });
     win.webContents.on('did-finish-load', () => {
       log('renderer loaded');
@@ -182,9 +259,14 @@ function runApp(): void {
       (globalThis as { __meetlessHot?: { ready(): void } }).__meetlessHot?.ready();
     });
     win.webContents.on('render-process-gone', (_e, d) => logError('renderer gone', d));
-    log('window created', { inactive: INACTIVE });
-    if (rendererUrl) await win.loadURL(rendererUrl);
-    else await win.loadFile(rendererFile, back?.route ? { query: { route: JSON.stringify(back.route) } } : undefined);
+    // The Expo renderer's route is its path: kept as it changes, saved when the window closes.
+    win.webContents.on('did-navigate', (_e, url) => rememberRoute(url));
+    win.webContents.on('did-navigate-in-page', (_e, url, isMainFrame) => {
+      if (isMainFrame) rememberRoute(url);
+    });
+    win.on('close', () => saveRoute());
+    log('window created', { inactive: INACTIVE, ui: rendererUrl ? 'dev' : isExpo(rendererDir) ? 'expo' : 'legacy' });
+    await loadRenderer(win, back?.route ?? lastRoute);
     if (back?.minimized) win.minimize();
   }
 
@@ -250,9 +332,29 @@ function runApp(): void {
   const relaunchFile = join(app.getPath('userData'), 'hot', 'relaunch.json');
   let restore = readJson<{ bounds?: Electron.Rectangle; minimized?: boolean; route?: unknown }>(relaunchFile);
   rmSync(relaunchFile, { force: true });
+  // A normal quit and reopen (or a closed and reopened window on macOS) comes back on the last route
+  // too: the Expo renderer's path, saved in <userData>/last-route.json. The legacy renderer has none.
+  const lastRouteFile = join(app.getPath('userData'), 'last-route.json');
+  let lastRoute: string | null = readJson<{ route?: unknown }>(lastRouteFile)?.route as string | null;
+  if (typeof lastRoute !== 'string' || !lastRoute.startsWith('/')) lastRoute = null;
+  const rememberRoute = (url: string) => {
+    if (!url.startsWith(`${APP_ORIGIN}/`)) return;
+    const u = new URL(url);
+    lastRoute = `${u.pathname}${u.search}`;
+  };
+  const saveRoute = () => {
+    try {
+      mkdirSync(dirname(lastRouteFile), { recursive: true });
+      writeFileSync(lastRouteFile, JSON.stringify({ route: lastRoute }));
+    } catch (e) {
+      logError('saving the route failed', e);
+    }
+  };
   const rendererRoute = async (w: BrowserWindow) => {
     try {
-      return JSON.parse((await w.webContents.executeJavaScript('JSON.stringify(window.__meetlessRoute ? window.__meetlessRoute() : null)', true)) as string) as unknown;
+      // Legacy renderer: its route object. Expo: the path Expo Router shows.
+      const js = `JSON.stringify(window.__meetlessRoute ? window.__meetlessRoute() : location.protocol === 'app:' ? location.pathname + location.search : null)`;
+      return JSON.parse((await w.webContents.executeJavaScript(js, true)) as string) as unknown;
     } catch {
       return null;
     }
@@ -289,9 +391,9 @@ function runApp(): void {
     if (!p || !w) return false;
     const route = await rendererRoute(w);
     if (p.apply === 'reload') {
-      rendererFile = hot.rendererOf(p.commit);
-      log('hot reload', { commit: p.commit.slice(0, 7) });
-      await w.loadFile(rendererFile, route ? { query: { route: JSON.stringify(route) } } : undefined);
+      rendererDir = dirname(hot.rendererOf(p.commit));
+      log('hot reload', { commit: p.commit.slice(0, 7), ui: isExpo(rendererDir) ? 'expo' : 'legacy' });
+      await loadRenderer(w, route);
       hot.applied(p.commit);
       return true;
     }
@@ -358,6 +460,7 @@ function runApp(): void {
       },
     });
     log('client opened', { session: (await node.snapshot()).session !== null });
+    protocol.handle('app', (req) => serveRenderer(req));
     node.subscribe((e) => {
       if (e.type === 'status') log('sync status', { state: e.status.state });
       for (const w of BrowserWindow.getAllWindows()) w.webContents.send(PUSH_CHANNEL, e);
@@ -395,6 +498,7 @@ function runApp(): void {
 
   app.on('before-quit', () => {
     log('quit');
+    saveRoute();
     void node?.close();
   });
 }
