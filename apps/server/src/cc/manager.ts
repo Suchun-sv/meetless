@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, 
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { noDots, type Id, type Project } from '@meetless/core';
-import type { CcEvent, CcHandoffCommand, CcItem, CcStatus } from '@meetless/api';
+import { MCP_TOOLS, type CcEvent, type CcHandoffCommand, type CcItem, type CcStatus } from '@meetless/api';
 import { hashSecret, newToken } from '../accounts/secrets';
 import { ApiError, type ApiDeps } from '../api/frame';
 import type { CcProjectRow, CcSessionRow, StoredEvent } from '../store/types';
@@ -314,6 +314,9 @@ export class CcManager {
       'project,local',
       '--permission-prompt-tool',
       'mcp__meetless__approve',
+      // The meetless tools never ask: settings rules for MCP tools did not hold in -p mode.
+      '--allowedTools',
+      MCP_TOOLS.map((t) => `mcp__meetless__${t}`).join(','),
     );
     const turn: Turn = { id: `turn-${randomUUID()}`, projectId, startedAt: this.now(), folder, events: [], done: false, cancelled: false, child: null, waiters: new Set(), sessionId: s?.sessionId ?? null };
     this.turns.set(projectId, turn);

@@ -971,5 +971,8 @@
   "cc.repo.label": "Code repository (read-only)",
   "cc.repo.ph": "A path on the server, e.g. ~/github/project",
   "cc.repo.save": "Save",
-  "cc.repo.saved": "Saved"
+  "cc.repo.saved": "Saved",
+  "cc.toolFailed": "{line}: error",
+  "cc.perm.lineAllowed": "{line} (allowed)",
+  "cc.perm.lineDenied": "{line} (denied)"
 }

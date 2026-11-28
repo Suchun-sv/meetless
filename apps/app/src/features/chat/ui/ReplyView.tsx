@@ -6,6 +6,7 @@ import { acceptAllCommands } from '../model/accept';
 import { importCommand, importResult, runCommands } from '../model/chat';
 import type { ReplyAction, ReplyBlock } from '../model/reply';
 import { useOpenTarget } from './nav';
+import { Markdown } from '../md/Markdown';
 import { NeedChip, NeedStatusText } from './NeedChip';
 
 /** Runs a reply's tap: open somewhere, accept all, import the message, or ask to refresh. */
@@ -51,6 +52,8 @@ export function ReplyView({ blocks, citeRows }: { blocks: readonly ReplyBlock[];
       {blocks.map((b, i) => {
         switch (b.kind) {
           case 'text':
+            // Model prose (DeepSeek) is Markdown; rule lines stay plain text.
+            if (b.gen) return <Markdown key={i} text={b.text} size={15} />;
             return (
               <Text key={i} size={b.small ? 'sm' : 'base'} color={b.faint ? 'textTertiary' : 'text'} selectable>
                 {b.text}

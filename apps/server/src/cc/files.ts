@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import type { Artifact, Id, Input, Project, Round, State } from '@meetless/core';
+import { MCP_TOOLS } from '@meetless/api';
 import type { BlobFiles } from '../blobs';
 
 /**
@@ -74,6 +75,7 @@ export function claudeMd(s: State, p: Project): string {
     '',
     '## 资料',
     '- `materials/` 里是导出的输入和产物（文本，以及有原件时的原件），可能不是最新的。',
+    '- 先 Read `materials/INDEX.md` 看有哪些文件，不要直接 Read 目录（这个会话没有 Glob 工具）。',
     '- 需求、交接、待确认等实时状态，调用 meetless MCP 工具（list_needs、get_need_context、search、read_artifact 等），不要只看 materials。',
     '',
   );
@@ -87,7 +89,8 @@ export function claudeMd(s: State, p: Project): string {
  */
 export function settingsJson(repoPath: string | null): string {
   // Claude Code matches file paths on Read and Edit rules only; Edit covers Write and NotebookEdit.
-  const allow = ['Read(./**)', 'Edit(./**)', 'mcp__meetless'];
+  // Every meetless tool by name: the server-wide `mcp__meetless` rule did not stop them asking.
+  const allow = ['Read(./**)', 'Edit(./**)', 'mcp__meetless', ...MCP_TOOLS.map((t) => `mcp__meetless__${t}`)];
   const deny = ['Edit(./repo/**)', 'Edit(./.claude/**)', 'Edit(./.mcp.json)', 'Edit(./.meetless/**)'];
   if (repoPath) {
     // The link's target too, however the tools resolve it.
@@ -206,6 +209,14 @@ export function syncMaterials(folder: string, s: State, projectId: Id, blobs: Bl
       if (v.derived?.texts?.length) put(`${dir}/${safe(v.label)}-${short(v.id)}.txt`, `${v.derived.texts.join('\n\n')}\n`);
     }
   }
+  // Always there: the list of files, since a session cannot list a folder without asking (no Glob, Bash asks).
+  const files = [...want].sort();
+  put(
+    'INDEX.md',
+    files.length
+      ? `# 材料目录\n\n${files.map((f) => `- materials/${f}`).join('\n')}\n`
+      : '# 材料目录\n\n暂时没有导出的材料。\n',
+  );
   const walk = (dir: string): string[] => {
     try {
       return readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(join(dir, d.name)) : [join(dir, d.name)]));

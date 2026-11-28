@@ -26,6 +26,27 @@ const HISTORY: CcItem[] = [
   { kind: 'result', id: 'r1', costUsd: 0.04, at: ago(39) },
 ];
 
+/** A fixed Markdown reply for `?ccmock=md`: heading, bold, list, a table wider than a phone, code. */
+const MD_SAMPLE = [
+  '## 离 VLDB 投稿还差什么',
+  '还剩 **5 天**，4 条外部需求都还没完成。按要紧程度：',
+  '',
+  '| 需求 | 状态 | 还差 | 负责人 | 预计 |',
+  '|---|---|---|---|---|',
+  '| N5 摘要突出 2 倍加速 | 未开始 | 改第二句 | Alex | 0.5 天 |',
+  '| N7 补一个消融实验 | 进行中 | 2 组消融 | Mia | 2 天 |',
+  '| N6 正文 12 页以内 | 进行中 | 0.6 页 | Alex | 1 天 |',
+  '',
+  '- 先结掉 *N5*，最快',
+  '- `exp-25`、`exp-26` 今晚开跑',
+  '',
+  '> 删掉 §5.3 后还超 0.6 页，H4 在验证。',
+  '',
+  '```bash',
+  'python run_ablation.py --config exp-25.yaml --seeds 3 --out results/table4.csv',
+  '```',
+].join('\n');
+
 interface Proj {
   status: CcStatus;
   items: CcItem[];
@@ -50,7 +71,7 @@ function proj(projectId: Id): Proj {
         turn: null,
         available: true,
       },
-      items: fresh ? [] : HISTORY.map((x) => ({ ...x })),
+      items: fresh ? [] : variant === 'md' ? [...HISTORY.slice(0, 1), { kind: 'assistant', id: 'md1', text: MD_SAMPLE, at: ago(38) }] : HISTORY.map((x) => ({ ...x })),
       waiting: new Map(),
       log: [],
       done: true,
@@ -138,7 +159,7 @@ export const mockCc = {
         return { ok: true } as T;
       case 'cc.handoff': {
         const id = pr.status.session?.id ?? 'SESSION';
-        const cd = "ssh -t the dev server 'cd ~/meetless/paper && env CLAUDE_CONFIG_DIR=$HOME/meetless/.claude-home ~/.local/bin/claude";
+        const cd = "ssh -t your-server 'cd ~/meetless/paper && env CLAUDE_CONFIG_DIR=$HOME/meetless/.claude-home ~/.local/bin/claude";
         return {
           commands: [
             { kind: 'terminal', command: `${cd} --resume ${id}'`, note: '在终端里接着这个会话' },

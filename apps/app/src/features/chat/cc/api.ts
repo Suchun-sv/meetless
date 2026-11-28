@@ -27,7 +27,7 @@ export interface CcStatus {
 export type CcItem =
   | { kind: 'user'; id: string; text: string; at: string }
   | { kind: 'assistant'; id: string; text: string; at: string }
-  | { kind: 'tool'; id: string; name: string; summary: string; ok: boolean | null; at: string }
+  | { kind: 'tool'; id: string; name: string; summary: string; ok: boolean | null; error?: string; at: string }
   | { kind: 'result'; id: string; costUsd?: number; at: string };
 
 export type CcEvent = { seq?: number } & (
@@ -35,7 +35,7 @@ export type CcEvent = { seq?: number } & (
   | { type: 'user'; id: string; text: string }
   | { type: 'text'; id: string; delta: string }
   | { type: 'tool'; id: string; name: string; summary: string }
-  | { type: 'tool_result'; id: string; ok: boolean }
+  | { type: 'tool_result'; id: string; ok: boolean; error?: string }
   | { type: 'permission'; approvalId: string; tool: string; input: string; expiresAt: string }
   | { type: 'permission_done'; approvalId: string; behavior: 'allow' | 'deny' }
   | { type: 'result'; costUsd?: number; durationMs?: number }

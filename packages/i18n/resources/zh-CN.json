@@ -971,5 +971,8 @@
   "cc.repo.label": "代码仓库（只读）",
   "cc.repo.ph": "服务器上的路径，例如 ~/github/project",
   "cc.repo.save": "保存",
-  "cc.repo.saved": "已保存"
+  "cc.repo.saved": "已保存",
+  "cc.toolFailed": "{line} 出错",
+  "cc.perm.lineAllowed": "{line}（已同意）",
+  "cc.perm.lineDenied": "{line}（已拒绝）"
 }

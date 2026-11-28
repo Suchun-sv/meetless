@@ -4,23 +4,29 @@ import type { Id } from '@meetless/core';
 import { Button, Text } from '@/components/ui';
 import { useApp } from '@/state';
 import { colors, fontFor, hasCjk, radius, space, tones } from '@/theme';
+import { Markdown } from '../md/Markdown';
 import { Icon } from '../ui/icons';
 import { secondsLeft, toolLine, type CcRow } from './model';
 import type { CcSession } from './useCcSession';
 
-/** A tool step: one grey line; a tap shows the tool name and its full argument. */
-function ToolRow({ r }: { r: Extract<CcRow, { kind: 'tool' }> }) {
+/**
+ * A tool step: one grey line, also when it failed (the agent usually recovers on its own; only a
+ * failed turn gets the red style). `answer` marks a step whose permission was answered. A tap shows
+ * the tool name, its full argument and the error.
+ */
+function ToolRow({ name, summary, ok, error, answer }: { name: string; summary: string; ok: boolean | null; error?: string; answer?: 'allow' | 'deny' }) {
   const { t } = useApp();
   const [open, setOpen] = useState(false);
-  const mark = r.ok === null ? '' : r.ok ? '' : `  ${t('cc.failed')}`;
+  const line = toolLine(t, name, summary);
+  const text = answer ? t(answer === 'allow' ? 'cc.perm.lineAllowed' : 'cc.perm.lineDenied', { line }) : ok === false ? t('cc.toolFailed', { line }) : line;
   return (
     <Pressable onPress={() => setOpen((v) => !v)} style={styles.tool} testID="cc-tool">
-      <Text size="xs" color={r.ok === false ? 'danger' : 'textTertiary'} numberOfLines={open ? undefined : 1}>
-        {toolLine(t, r.name, r.summary) + mark}
+      <Text size="xs" color="textTertiary" numberOfLines={open ? undefined : 1}>
+        {text}
       </Text>
       {open && (
         <Text size="xs" mono color="textTertiary" selectable>
-          {`${r.name}  ${r.summary}`}
+          {[`${name}  ${summary}`, error].filter(Boolean).join('\n')}
         </Text>
       )}
     </Pressable>
@@ -73,7 +79,9 @@ export function CcThread({ s, style }: { s: CcSession; style?: StyleProp<ViewSty
   return (
     <ScrollView ref={ref} style={[styles.thread, style]} contentContainerStyle={styles.threadIn} onContentSizeChange={toEnd} onLayout={toEnd} keyboardShouldPersistTaps="handled" testID="cc-thread">
       {s.more && <Button variant="link" size="sm" label={t('cc.more')} onPress={() => void s.loadMore()} style={styles.start} />}
-      {s.rows.map((r) => {
+      {s.rows.map((r, i) => {
+        const nx = s.rows[i + 1];
+        const pv = i > 0 ? s.rows[i - 1] : undefined;
         switch (r.kind) {
           case 'user':
             return (
@@ -84,14 +92,14 @@ export function CcThread({ s, style }: { s: CcSession; style?: StyleProp<ViewSty
               </View>
             );
           case 'assistant':
-            return (
-              <Text key={r.id} size="md" selectable style={styles.assistant}>
-                {r.text}
-              </Text>
-            );
+            return <Markdown key={r.id} text={r.text} />;
           case 'tool':
-            return <ToolRow key={r.id} r={r} />;
+            // A step that asked for permission is shown by its permission row (card while pending, then one line).
+            if ((nx?.kind === 'permission' && nx.tool === r.name) || (pv?.kind === 'permission' && pv.tool === r.name)) return null;
+            return <ToolRow key={r.id} name={r.name} summary={r.summary} ok={r.ok} error={r.error} />;
           case 'permission':
+            // Only a request still waiting is a card; once answered it folds back to one grey line.
+            if (r.state !== 'pending') return <ToolRow key={r.id} name={r.tool} summary={r.input} ok={null} answer={r.state} />;
             return <PermissionCard key={r.id} r={r} canAnswer={owner} onAnswer={(allow) => void s.approve(r.id, allow)} />;
           case 'result':
             return null;
@@ -206,7 +214,6 @@ const styles = StyleSheet.create({
   thread: { flex: 1 },
   threadIn: { gap: space[3], paddingVertical: space[2] },
   user: { alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: colors.surface, borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: space[2] + 2 },
-  assistant: { lineHeight: 24 },
   tool: { gap: 2 },
   perm: { gap: space[2], borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.xl, padding: space[3], backgroundColor: colors.textInverse },
   permInput: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: space[2], paddingVertical: space[1] + 2 },

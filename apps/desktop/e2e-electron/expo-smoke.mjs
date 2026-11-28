@@ -71,9 +71,11 @@ try {
     check('route kept across a reload', path !== '/' && after === path, `${path} -> ${after}`);
     await win.screenshot({ path: `${shots}/expo-03-project-reloaded.png` });
   }
-  // MEETLESS_SMOKE_PATHS: more pages to open and screenshot, comma-separated; `path#testID` also waits for that element.
+  // MEETLESS_SMOKE_PATHS: more pages to open and screenshot, comma-separated; `path#testID` also waits for
+  // that element, and `path#testID>clickID` then clicks another one (e.g. to open a panel) before the shot.
   for (const entry of (process.env.MEETLESS_SMOKE_PATHS ?? '').split(',').filter(Boolean)) {
-    const [path, testId] = entry.split('#');
+    const [path, rest] = entry.split('#');
+    const [testId, clickId] = (rest ?? '').split('>');
     const before = errors.filter((e) => e.startsWith('pageerror')).length;
     await win.evaluate((u) => {
       location.href = u;
@@ -81,6 +83,10 @@ try {
     await win.getByTestId('nav-home').waitFor({ timeout: 30_000 });
     let found = true;
     if (testId) found = await win.getByTestId(testId).first().waitFor({ timeout: 15_000 }).then(() => true, () => false);
+    if (found && clickId) {
+      await win.getByTestId(clickId).first().click();
+      await win.waitForTimeout(2500);
+    }
     await win.waitForTimeout(2000);
     await win.screenshot({ path: `${shots}/expo-path${path.replace(/[^a-z0-9]+/gi, '_')}.png` });
     const crashed = errors.filter((e) => e.startsWith('pageerror')).length > before;

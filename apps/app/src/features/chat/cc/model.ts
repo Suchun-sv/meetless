@@ -6,7 +6,7 @@ import type { CcEvent, CcItem } from './api';
 export type CcRow =
   | { kind: 'user'; id: string; text: string }
   | { kind: 'assistant'; id: string; text: string }
-  | { kind: 'tool'; id: string; name: string; summary: string; ok: boolean | null }
+  | { kind: 'tool'; id: string; name: string; summary: string; ok: boolean | null; error?: string }
   | { kind: 'permission'; id: string; tool: string; input: string; expiresAt: string; state: 'pending' | 'allow' | 'deny' }
   | { kind: 'result'; id: string; costUsd?: number }
   | { kind: 'error'; id: string; code: string };
@@ -18,7 +18,7 @@ export function fromHistory(items: readonly CcItem[]): CcRow[] {
       case 'assistant':
         return { kind: x.kind, id: x.id, text: x.text };
       case 'tool':
-        return { kind: 'tool', id: x.id, name: x.name, summary: x.summary, ok: x.ok };
+        return { kind: 'tool', id: x.id, name: x.name, summary: x.summary, ok: x.ok, ...(x.error ? { error: x.error } : {}) };
       case 'result':
         return { kind: 'result', id: x.id, costUsd: x.costUsd };
     }
@@ -41,7 +41,7 @@ export function applyEvent(rows: readonly CcRow[], e: CcEvent): CcRow[] {
     case 'tool':
       return [...rows, { kind: 'tool', id: e.id, name: e.name, summary: e.summary, ok: null }];
     case 'tool_result':
-      return rows.map((r) => (r.kind === 'tool' && r.id === e.id ? { ...r, ok: e.ok } : r));
+      return rows.map((r) => (r.kind === 'tool' && r.id === e.id ? { ...r, ok: e.ok, ...(e.error ? { error: e.error } : {}) } : r));
     case 'permission':
       return [...rows, { kind: 'permission', id: e.approvalId, tool: e.tool, input: e.input, expiresAt: e.expiresAt, state: 'pending' }];
     case 'permission_done':
