@@ -5,7 +5,7 @@ import { myProjectIds, noDots, progressCard, projectNeeds, CLOSED_STATUSES, type
 import { colors, space } from '@/theme';
 import { Icon, Text } from '@/components/ui';
 import { routeToHref, useApp } from '@/state';
-import { daysColor } from './PhoneHeader';
+import { daysStyle } from './PhoneHeader';
 import { ProjectSheet } from './ProjectSheet';
 
 /**
@@ -43,7 +43,7 @@ export function ProjectsScreen() {
                   {noDots(p.name)}
                 </Text>
                 {r.pc.daysLeft !== null ? (
-                  <Text size="sm" weight="medium" tight color={daysColor(r.pc.daysLeft)}>
+                  <Text size="sm" weight="medium" tight style={daysStyle(r.pc.daysLeft)}>
                     {r.pc.daysLeft >= 0 ? t('round.left', { n: r.pc.daysLeft }) : t('round.over', { n: -r.pc.daysLeft })}
                   </Text>
                 ) : null}

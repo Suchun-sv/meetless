@@ -2,7 +2,10 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors, type ColorName } from '@/theme';
 
 /** The few line icons the phone shell uses (1.6 stroke, square-ish ends, no filled dots except ⋯'s). */
-export type IconName = 'calendar' | 'folder' | 'inbox' | 'back' | 'chevron' | 'more' | 'sparkle' | 'send' | 'close' | 'plus' | 'check' | 'down' | 'info';
+export type IconName =
+  | 'calendar' | 'folder' | 'inbox' | 'back' | 'chevron' | 'more' | 'sparkle' | 'send' | 'close' | 'plus' | 'check' | 'down' | 'info'
+  // mobile-v2 inbox: material kinds, the input's buttons, and moving an item to another project
+  | 'mail' | 'chat' | 'file' | 'paperclip' | 'camera' | 'image' | 'swap';
 
 export function Icon({ name, size = 22, color = 'text', strokeWidth = 1.6 }: { name: IconName; size?: number; color?: ColorName; strokeWidth?: number }) {
   const c = colors[color];
@@ -39,6 +42,34 @@ export function Icon({ name, size = 22, color = 'text', strokeWidth = 1.6 }: { n
       {name === 'close' && <Path d="M6 6l12 12M18 6 6 18" {...p} />}
       {name === 'plus' && <Path d="M12 5v14M5 12h14" {...p} />}
       {name === 'check' && <Path d="M7 12.5l3.2 3.2L17 9" {...p} />}
+      {name === 'mail' && (
+        <>
+          <Rect x={3.5} y={5.5} width={17} height={13} rx={2} {...p} />
+          <Path d="M4 7l8 6 8-6" {...p} />
+        </>
+      )}
+      {name === 'chat' && <Path d="M20 11.5a7.5 7 0 0 1-10.6 6.4L4.5 19.5l1.5-4.2A7 7 0 0 1 4.5 11.5 7.5 7 0 0 1 20 11.5z" {...p} />}
+      {name === 'file' && (
+        <>
+          <Path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z" {...p} />
+          <Path d="M14 3.5v5h5M9 13h6M9 16.5h6" {...p} />
+        </>
+      )}
+      {name === 'paperclip' && <Path d="M20 11.5l-7.8 7.8a4.8 4.8 0 0 1-6.8-6.8l8.1-8.1a3.2 3.2 0 0 1 4.5 4.5l-8.1 8.1a1.6 1.6 0 0 1-2.3-2.3l7.4-7.4" {...p} />}
+      {name === 'camera' && (
+        <>
+          <Path d="M4 8.5a2 2 0 0 1 2-2h2.2l1.5-2h4.6l1.5 2H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" {...p} />
+          <Circle cx={12} cy={12.5} r={3.3} {...p} />
+        </>
+      )}
+      {name === 'image' && (
+        <>
+          <Rect x={3.5} y={4.5} width={17} height={15} rx={2} {...p} />
+          <Circle cx={9} cy={9.5} r={1.6} {...p} />
+          <Path d="M20.5 15.5 16 11l-8.5 8.5" {...p} />
+        </>
+      )}
+      {name === 'swap' && <Path d="M7 7.5h12M15.5 4l3.5 3.5-3.5 3.5M17 16.5H5M8.5 13 5 16.5 8.5 20" {...p} />}
       {name === 'info' && (
         <>
           <Circle cx={12} cy={12} r={9} {...p} />

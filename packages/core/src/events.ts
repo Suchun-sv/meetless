@@ -64,8 +64,9 @@ export interface EventPayloads {
   'role.member_assigned': { roleId: Id; userId: Id };
   'role.member_removed': { roleId: Id; userId: Id };
 
-  'round.created': { roundId: Id; projectId: Id; title: string; kind: RoundKind; start: IsoDate; due: IsoDate; items?: string[] };
-  'round.updated': { roundId: Id; title?: string; kind?: RoundKind; start?: IsoDate; due?: IsoDate; items?: string[] };
+  'round.created': { roundId: Id; projectId: Id; title: string; kind: RoundKind; start: IsoDate; due: IsoDate; items?: string[]; span?: boolean };
+  /** `span: true` marks the round a period, `false` or `null` makes it a deadline again. */
+  'round.updated': { roundId: Id; title?: string; kind?: RoundKind; start?: IsoDate; due?: IsoDate; items?: string[]; span?: boolean | null };
   /** Makes a planned round the current one (the previous current round, if not delivered, goes back to planned). */
   'round.started': { roundId: Id };
   /** Freezes the round's delivery. `account` defaults to the live status of the round's shared external needs. */

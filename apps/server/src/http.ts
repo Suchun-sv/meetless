@@ -14,6 +14,8 @@ import { loadSkillMarkdown, skillPathFromEnv } from './accounts/guide';
 import { registerMcp } from './mcp/server';
 import { ccConfigFrom } from './cc/config';
 import { CcManager } from './cc/manager';
+import { InboxManager } from './inbox/manager';
+import { ocrConfigFrom } from './inbox/ocr';
 import { bearerToken, isAuthFailure, type Principal } from './auth';
 import { OfficeViewer } from './office/onlyoffice';
 import { OfficeTickets } from './office/tickets';
@@ -119,6 +121,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const deps: ApiDeps = { service, accounts: opts.accounts, auth, cfg, rateLimits, skillMarkdown, ai };
   // One OfficeViewer per server, so its 30s availability cache actually caches across requests.
   deps.officeViewer = new OfficeViewer(deps, opts.officeTickets ?? new OfficeTickets(), opts.officeFetch);
+  const inbox = new InboxManager(deps, ocrConfigFrom(cfg.env ?? process.env));
+  deps.inbox = inbox;
+  void inbox.start(Object.keys(service.current.users)).catch((e: unknown) => cfg.print(`inbox start: ${(e as Error).message}`));
   const ccCfg = ccConfigFrom(cfg);
   if (ccCfg) {
     const cc = new CcManager(deps, ccCfg);

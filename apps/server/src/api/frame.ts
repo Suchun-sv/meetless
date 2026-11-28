@@ -19,6 +19,7 @@ import { bearerToken, isAuthFailure, type Authenticator, type AuthFailure, type 
 import { checkCsrf, parseCookies } from '../web/cookies';
 import type { ProjectAi } from '../agents/deepseek';
 import type { CcManager } from '../cc/manager';
+import type { InboxManager } from '../inbox/manager';
 import type { OfficeViewer } from '../office/onlyoffice';
 import type { RateLimiter } from './ratelimit';
 import type { ServerConfig } from '../server';
@@ -170,6 +171,8 @@ export interface ApiDeps {
   ai?: ProjectAi;
   /** Projects' Claude Code sessions; absent when the server runs none (MEETLESS_CC_HOME unset). */
   cc?: CcManager;
+  /** The 「需求」 inbox. */
+  inbox?: InboxManager;
 }
 
 type AuthOf<K extends ApiName> = (typeof API_ROUTES)[K]['auth'];
@@ -186,7 +189,7 @@ export interface RouteCtx<K extends ApiName> {
 export type Handler<K extends ApiName> = (ctx: RouteCtx<K>) => Promise<ApiResponse<K>>;
 
 /** Query keys that arrive as numbers when they are plain digits. */
-export const NUMERIC_QUERY: ReadonlySet<string> = new Set(['limit', 'round', 'after']);
+export const NUMERIC_QUERY: ReadonlySet<string> = new Set(['limit', 'round', 'after', 'rev']);
 
 const MAX_CLIENT_LENGTH = 64;
 

@@ -3,3 +3,4 @@ export { routePath, routeToHref, PROJECT_SECTIONS, SECTION_TITLE_KEY, type AppRo
 export { displayName, initials, localDay, myProjects, newId, safeReplay, type Replayed } from './model';
 export { useProject, useProjectId } from './hooks';
 export { todayCount } from './today';
+export { pendingMaterials, pendingMaterialCount, type PendingMaterial } from './inbox';

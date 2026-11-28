@@ -7,6 +7,7 @@ import { useLayout } from '@/theme';
 import { setDockHeight } from './dockHeight';
 import { AskBar } from './ui/AgentSheet';
 import { ChatPanel } from './ui/ChatPanel';
+import { InboxDoneBar } from '../inbox/ui/DoneBar';
 
 export { useDockHeight } from './dockHeight';
 
@@ -27,18 +28,26 @@ export function ChatDock() {
   useEffect(() => {
     if (hidden) setDockHeight(0);
   }, [hidden]);
-  if (hidden) return null;
+  // 「《…》分析完了」 from the 需求 inbox shows on every page, also where there is no dock.
+  const bar = <InboxDoneBar />;
+  if (hidden) return bar;
   const expand = projectId && phone ? () => router.push(routePath({ view: 'chat', projectId }) as Href) : undefined;
   if (phone) {
     return (
-      <View onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}>
-        <AskBar key={projectId ?? 'home'} scope={projectId ?? 'home'} onDash={projectId ? section === 'dash' : true} />
-      </View>
+      <>
+        {bar}
+        <View onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}>
+          <AskBar key={projectId ?? 'home'} scope={projectId ?? 'home'} onDash={projectId ? section === 'dash' : true} />
+        </View>
+      </>
     );
   }
   return (
-    <View onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}>
-      {projectId ? <ChatPanel key={projectId} scope={projectId} onDash={section === 'dash'} onExpand={expand} /> : <ChatPanel key="home" scope="home" onDash />}
-    </View>
+    <>
+      {bar}
+      <View onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}>
+        {projectId ? <ChatPanel key={projectId} scope={projectId} onDash={section === 'dash'} onExpand={expand} /> : <ChatPanel key="home" scope="home" onDash />}
+      </View>
+    </>
   );
 }

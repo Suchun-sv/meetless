@@ -37,6 +37,14 @@ export const colors = {
   warningBg: '#FBF3DB',
   danger: '#9F2F2D',
   dangerBg: '#FDEBEC',
+  /** Remaining-days levels (mine-v3, src/ui/urgency.ts): orange 3 to 7 days, yellow 8 to 14, and the marks of the grey levels. */
+  urgentOrange: '#B4541A',
+  urgentOrangeBg: '#FBEEE4',
+  urgentYellow: '#8F6A00',
+  markGrey: '#B9B8B4',
+  markFar: '#CFCEC9',
+  /** Calendar days outside the shown month (mobile-v2). */
+  otherMonth: '#C9C8C4',
   // avatars
   avatar: ['#B07D57', '#5A7DA3', '#A5698A', '#5C8868', '#4D878C', '#8A7657', '#7B8A4B', '#8C8A85'] as const,
 } as const;

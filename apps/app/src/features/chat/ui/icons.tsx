@@ -19,7 +19,12 @@ export type IconName =
   | 'left'
   | 'right'
   | 'chevUp'
-  | 'package';
+  | 'package'
+  | 'clip'
+  | 'camera'
+  | 'image'
+  | 'check'
+  | 'checkCircle';
 
 export function Icon({ name, size = 18, color = colors.textTertiary, stroke = 2 }: { name: IconName; size?: number; color?: string; stroke?: number }) {
   const p = { stroke: color, strokeWidth: stroke, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
@@ -91,6 +96,32 @@ export function Icon({ name, size = 18, color = colors.textTertiary, stroke = 2 
             return <Path d="m9 18 6-6-6-6" {...p} />;
           case 'chevUp':
             return <Path d="m18 15-6-6-6 6" {...p} />;
+          case 'clip':
+            return <Path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" {...p} />;
+          case 'camera':
+            return (
+              <>
+                <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" {...p} />
+                <Circle cx={12} cy={13} r={3} {...p} />
+              </>
+            );
+          case 'image':
+            return (
+              <>
+                <Rect x={3} y={3} width={18} height={18} rx={2} {...p} />
+                <Circle cx={9} cy={9} r={2} {...p} />
+                <Path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" {...p} />
+              </>
+            );
+          case 'check':
+            return <Path d="M20 6 9 17l-5-5" {...p} />;
+          case 'checkCircle':
+            return (
+              <>
+                <Circle cx={12} cy={12} r={10} {...p} />
+                <Path d="m9 12 2 2 4-4" {...p} />
+              </>
+            );
           case 'package':
             return (
               <>

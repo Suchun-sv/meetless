@@ -7,6 +7,7 @@ import type {
   BlobMeta,
   CcProjectRow,
   CcSessionRow,
+  InboxRow,
   BlobMetaStore,
   DerivationRow,
   DerivationStore,
@@ -125,6 +126,28 @@ export class MemoryAccountStore implements AccountStore {
   private calls: AgentCallRow[] = [];
   private cc = new Map<Id, CcProjectRow>();
   private ccSess: CcSessionRow[] = [];
+  private inboxRows = new Map<string, InboxRow>();
+
+  async inbox(id: string): Promise<InboxRow | null> {
+    const r = this.inboxRows.get(id);
+    return r ? structuredClone(r) : null;
+  }
+
+  async inboxOf(userId: Id): Promise<InboxRow[]> {
+    return byNewest(
+      [...this.inboxRows.values()].filter((r) => r.userId === userId),
+      (r) => r.createdAt,
+    ).map((r) => structuredClone(r));
+  }
+
+  async putInbox(r: InboxRow): Promise<void> {
+    const prev = this.inboxRows.get(r.id);
+    this.inboxRows.set(r.id, structuredClone({ ...r, createdAt: prev?.createdAt ?? r.createdAt }));
+  }
+
+  async deleteInbox(id: string): Promise<void> {
+    this.inboxRows.delete(id);
+  }
 
   async ccProject(projectId: Id): Promise<CcProjectRow | null> {
     const r = this.cc.get(projectId);

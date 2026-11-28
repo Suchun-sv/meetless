@@ -12,7 +12,8 @@ import type { Route as RendererRoute } from '@renderer/app/routes';
  *   /projects/new                       new project                 A1 features/projects
  *   /reminders                          deadline reminders          A1 features/reminders
  *   /projects                           项目 tab home (phones)      P0 shell
- *   /confirm                            待确认 tab, all projects    A2 features/confirm
+ *   /inbox                              需求 tab, the inbox (B1)    A3 features/inbox
+ *   /confirm                            old 待确认 (all projects)   A2 features/confirm
  *   /search                             search                      A4 features/search
  *   /settings                           settings                    A4 features/settings
  *   /agents                             agent access                A4 features/settings
@@ -31,7 +32,7 @@ import type { Route as RendererRoute } from '@renderer/app/routes';
  *   /p/:pid/lineage                     脉络 segment (project)      A3 features/lineage
  *   /p/:pid/lineage/:needId             脉络 of one need            A3 features/lineage
  */
-export type ExtraGlobalView = 'search' | 'settings' | 'reminders' | 'projects' | 'confirmAll';
+export type ExtraGlobalView = 'search' | 'settings' | 'reminders' | 'projects' | 'confirmAll' | 'inbox';
 export type ExtraProjectView = 'confirm' | 'chat' | 'import' | 'handoff' | 'lineage';
 
 export type AppRoute =
@@ -82,7 +83,9 @@ export function routePath(r: AppRoute): string {
     case 'projects':
       return `/${r.view}`;
     case 'confirmAll':
-      return '/confirm';
+    case 'inbox':
+      // mobile-v2: the old 待确认 page lives inside the 「需求」 inbox.
+      return '/inbox';
   }
   const p = `/p/${enc(r.projectId)}`;
   // The handoff form for a need: /handoff?need= (the page reads it).

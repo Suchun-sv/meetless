@@ -1,0 +1,6 @@
+{
+  "name": "meetless-ocr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-device OCR for the Meetless iOS app: Apple Vision VNRecognizeTextRequest (zh-Hans, en)."
+}

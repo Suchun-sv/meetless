@@ -76,7 +76,8 @@ export function progressCard(s: State, projectId: Id, today: string): ProgressCa
   const doing = ext.filter((n) => n.status === 'doing' || n.status === 'partial').length;
   return {
     round: r,
-    daysLeft: r ? daysBetween(today, r.due) : null,
+    // A period (span) is no deadline: no countdown.
+    daysLeft: r && !r.span ? daysBetween(today, r.due) : null,
     ext: ext.length,
     done,
     doing,
@@ -102,7 +103,7 @@ export function riskList(s: State, userId: Id, projectId: Id, today: string): Ri
   const inp = projectInputs(s, projectId).filter((i) => i.privateTo === null && inputStatus(i) === 'pending').length;
   if (inp) out.push({ tone: 'gray', code: 'inputs', projectId, n: inp, go: 'inputs' });
   const r = currentRound(s, projectId);
-  if (r) {
+  if (r && !r.span) {
     const left = daysBetween(today, r.due);
     if (left <= 5) {
       for (const n of projectNeeds(s, projectId)) {
@@ -208,7 +209,7 @@ export function homeItems(s: State, userId: Id, today: string): HomeItems {
     }
     for (const n of projectNeeds(s, pid)) if (n.ownerId === userId && !CLOSED_STATUSES.has(n.status)) out.mine.push({ projectId: pid, needId: n.id });
     const r = currentRound(s, pid);
-    if (r) out.due.push({ projectId: pid, roundId: r.id, daysLeft: daysBetween(today, r.due) });
+    if (r && !r.span) out.due.push({ projectId: pid, roundId: r.id, daysLeft: daysBetween(today, r.due) });
   }
   out.due.sort((a, b) => a.daysLeft - b.daysLeft);
   return out;

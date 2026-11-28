@@ -6,6 +6,7 @@ import { ST_TONE } from '@renderer/ui/tone';
 import { Button, Sheet, Text, TextField } from '@/components/ui';
 import { useApp, useGo } from '@/state';
 import { colors, radius, space, tones, type ColorName } from '@/theme';
+import { urgencyTone } from '@/ui/urgency';
 import { PHONE_BOTTOM } from '../../artifacts/ui/ArtifactsPhone';
 import { themeTone } from '../../inputs/ui/common';
 import { Icon } from '../../inputs/ui/icons';
@@ -13,11 +14,6 @@ import { deliverySections, draftItems, feedbackLine, type DeliverySection } from
 
 function daysLeft(today: IsoDate, due: IsoDate): number {
   return Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-}
-
-/** Days left: three or fewer red, a week or fewer amber, else secondary (NOTES 全局规则). */
-function leftColor(n: number): ColorName {
-  return n <= 3 ? 'danger' : n <= 7 ? 'warning' : 'textSecondary';
 }
 
 const STATUS_COLOR: Record<string, ColorName> = { current: 'info', planned: 'textTertiary', delivered: 'success' };
@@ -72,7 +68,7 @@ export function DeliveriesPhone({ projectId, round }: { projectId: Id; round?: n
 }
 
 function Folded({ projectId, rest, open, setOpen }: { projectId: Id; rest: DeliverySection[]; open: number | null; setOpen: (n: number | null) => void }) {
-  const { t, fmtDay } = useApp();
+  const { t, fmtDay, today } = useApp();
   return (
     <View style={{ marginTop: 22 }}>
       {rest.map((s, i) => {
@@ -85,7 +81,7 @@ function Folded({ projectId, rest, open, setOpen }: { projectId: Id; rest: Deliv
               <Text size="base" color={STATUS_COLOR[r.status] ?? 'textTertiary'}>
                 {t(`round.${r.status}` as MessageKey)}
               </Text>
-              <Text size="base" color="textTertiary">
+              <Text size="base" style={{ color: r.status === 'delivered' ? colors.textTertiary : urgencyTone(daysLeft(today, r.due)).fg }}>
                 {fmtDay(r.status === 'delivered' && r.delivery ? r.delivery.date : r.due)}
               </Text>
               <Text size="md" numberOfLines={1} style={{ flex: 1 }}>
@@ -165,7 +161,7 @@ function RoundCard({ projectId, section }: { projectId: Id; section: DeliverySec
             <Text size="base" color="textSecondary">
               {t('round.due', { d: fmtDay(round.due) })}
             </Text>
-            <Text size="base" color={leftColor(left)}>
+            <Text size="base" style={{ color: urgencyTone(left, data.account.length > 0 && met === data.account.length).fg }}>
               {t('round.left', { n: Math.max(0, left) })}
             </Text>
           </>

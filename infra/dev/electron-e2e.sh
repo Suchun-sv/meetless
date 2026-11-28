@@ -28,7 +28,8 @@ if [ "$ui" = legacy ]; then
   script=e2e-electron/run.mjs
   net=(--network meetless-dev-net)
 else
-  script=e2e-electron/expo-smoke.mjs
+  # MEETLESS_E2E_SCRIPT: another script of the same kind (e.g. e2e-electron/inbox-smoke.mjs).
+  script=${MEETLESS_E2E_SCRIPT:-e2e-electron/expo-smoke.mjs}
   server="${MEETLESS_SMOKE_SERVER:?set MEETLESS_SMOKE_SERVER (or .data/smoke.env)}"
   host="$(echo "$server" | sed -E 's#^https?://([^/:]+).*#\1#')"
   export MEETLESS_SMOKE_TOKEN="${MEETLESS_SMOKE_TOKEN:-$(cat "${MEETLESS_SMOKE_TOKEN_FILE:?set MEETLESS_SMOKE_TOKEN or MEETLESS_SMOKE_TOKEN_FILE}")}"

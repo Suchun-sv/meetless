@@ -93,6 +93,13 @@ function date(v: unknown, field: string): IsoDate {
 
 const BLOB = /^sha256:[0-9a-f]{64}$/;
 
+/** A round's `span` flag: true, or false/null (a deadline); anything else is not a valid event. */
+function spanOf(v: unknown): boolean {
+  if (v === undefined || v === null || v === false) return false;
+  if (v === true) return true;
+  throw new DomainError('INVALID_EVENT', 'round span must be true, false or null');
+}
+
 /** Phase 2's reserved `round.delivered.agentSnapshot`, checked for shape only. */
 function agentSnapshot(v: unknown): AgentSnapshot {
   const bad = (): never => {
@@ -493,6 +500,7 @@ const handlers: Handlers = {
       status: currentRound(s, p.projectId) ? 'planned' : 'current',
       items: (p.items ?? []).map((x) => text(x, 'item')),
       delivery: null,
+      ...(spanOf(p.span) ? { span: true } : {}),
     };
   },
   'round.updated': (s, e) => {
@@ -507,6 +515,10 @@ const handlers: Handlers = {
     if (p.start !== undefined) r.start = date(p.start, 'start');
     if (p.due !== undefined) r.due = date(p.due, 'due');
     if (r.due < r.start) throw new DomainError('INVALID_EVENT', 'due date before start');
+    if (p.span !== undefined) {
+      if (spanOf(p.span)) r.span = true;
+      else delete r.span;
+    }
     if (p.items !== undefined) {
       if (r.status === 'delivered') throw new DomainError('INVALID_STATE_TRANSITION', 'delivered rounds are frozen');
       r.items = p.items.map((x) => text(x, 'item'));

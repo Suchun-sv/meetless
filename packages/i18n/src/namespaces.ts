@@ -41,6 +41,7 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   lnv: 'U2',
   dock: 'U1',
   cc: 'U1',
+  inb: 'U3',
   // Expo A4 (search, settings)
   search: 'base',
   set: 'base',
@@ -86,6 +87,7 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   // A2 (Expo needs and To confirm)
   need: 'U2',
   cfm: 'U2',
+  rv: 'U2',
   // U3 (inputs and artifacts)
   in: 'U3',
   af: 'U3',

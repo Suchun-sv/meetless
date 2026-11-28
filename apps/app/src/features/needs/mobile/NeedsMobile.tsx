@@ -9,7 +9,8 @@ import { statusCommand } from '../model/edit';
 import { runCmds } from '../../confirm/model/run';
 import { useApp, useGo } from '@/state';
 import { colors, space } from '@/theme';
-import type { Id, Need, NeedStatus } from '@meetless/core';
+import { daysLeft, isOpen, type Id, type Need, type NeedStatus } from '@meetless/core';
+import { urgencyTone } from '@/ui/urgency';
 import { mobileNeedsVM, type DeadlineGroup, type NeedRow as Row, type NextReason } from '../model/mobile';
 
 /** Bottom room for the ask bar and the tab bar (mobile-v1 decision 3). */
@@ -101,12 +102,19 @@ function NeedLine({ row, onOpen, divider }: { row: Row; onOpen: (n: Need) => voi
   );
 }
 
-function SectionHead({ title, right }: { title: string; right?: string }) {
+type Left = { text: string; color: string } | null;
+
+function SectionHead({ title, right, left }: { title: string; right?: string; left?: Left }) {
   return (
     <View style={styles.secH}>
-      <Text size="sm" weight="medium" color="textSecondary" tight>
+      <Text size="sm" weight="medium" color="textSecondary" tight style={{ flex: 1 }}>
         {title}
       </Text>
+      {left ? (
+        <Text size="sm" tight style={{ color: left.color }}>
+          {left.text}
+        </Text>
+      ) : null}
       {right ? (
         <Text size="sm" color="textTertiary" tight>
           {right}
@@ -116,7 +124,7 @@ function SectionHead({ title, right }: { title: string; right?: string }) {
   );
 }
 
-function Fold({ label, right, children, testID }: { label: string; right?: string; children: React.ReactNode; testID?: string }) {
+function Fold({ label, right, left, children, testID }: { label: string; right?: string; left?: Left; children: React.ReactNode; testID?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <View>
@@ -124,6 +132,11 @@ function Fold({ label, right, children, testID }: { label: string; right?: strin
         <Text size="md" style={{ flex: 1 }} numberOfLines={1}>
           {label}
         </Text>
+        {left ? (
+          <Text size="sm" tight style={{ color: left.color }}>
+            {left.text}
+          </Text>
+        ) : null}
         {right ? (
           <Text size="sm" color="textTertiary" tight>
             {right}
@@ -145,6 +158,12 @@ export function NeedsMobile({ projectId }: { projectId: Id }) {
   const vm = useMemo(() => mobileNeedsVM(live, me, projectId, today), [live, me, projectId, today]);
   const open = (n: Need) => go({ view: 'board', projectId, needId: n.id });
   const name = (id: Id) => live.users[id]?.displayName ?? id;
+  const leftOf = (g: DeadlineGroup): Left => {
+    if (!g.round) return null;
+    const d = daysLeft(g.round, today);
+    const done = g.rows.length > 0 && g.rows.every((r) => !isOpen(r.need));
+    return { text: d < 0 ? t('round.over', { n: -d }) : t('round.left', { n: d }), color: urgencyTone(d, done).fg };
+  };
   const roundTitle = (g: DeadlineGroup) => (g.round ? g.round.title || t('round', { n: g.round.n }) : t('col.unscheduled'));
   // Live state streams in; pull-to-refresh only gives the gesture its feedback.
   const onRefresh = () => {
@@ -183,7 +202,7 @@ export function NeedsMobile({ projectId }: { projectId: Id }) {
         </View>
       ) : null}
       <View style={styles.blk}>
-        <SectionHead title={vm.current ? vm.current.title || t('round', { n: vm.current.n }) : t('nav.board')} right={vm.current ? fmtDay(vm.current.due) : undefined} />
+        <SectionHead title={vm.current ? vm.current.title || t('round', { n: vm.current.n }) : t('nav.board')} right={vm.current ? fmtDay(vm.current.due) : undefined} left={vm.current ? leftOf({ round: vm.current, rows: vm.rows }) : null} />
         {vm.rows.length === 0 ? (
           <Text size="sm" color="textTertiary" style={styles.pad}>
             {t('col.empty')}
@@ -197,7 +216,7 @@ export function NeedsMobile({ projectId }: { projectId: Id }) {
         <View style={styles.blk}>
           <SectionHead title={t('need.others')} />
           {vm.others.map((g) => (
-            <Fold key={g.round!.id} testID="m-other" label={roundTitle(g)} right={fmtDay(g.round!.due)}>
+            <Fold key={g.round!.id} testID="m-other" label={roundTitle(g)} right={fmtDay(g.round!.due)} left={leftOf(g)}>
               {g.rows.length === 0 ? (
                 <Text size="sm" color="textTertiary" style={styles.pad}>
                   {t('col.empty')}
@@ -235,7 +254,7 @@ const HAIR = StyleSheet.hairlineWidth;
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   blk: { marginTop: space[5] },
-  secH: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space[5], marginBottom: space[1] },
+  secH: { flexDirection: 'row', gap: space[3], alignItems: 'baseline', paddingHorizontal: space[5], marginBottom: space[1] },
   rowPad: { paddingHorizontal: space[5] },
   hrow: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 44, paddingVertical: 10 },
   hdiv: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong },

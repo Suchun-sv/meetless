@@ -8,6 +8,7 @@ import type {
   BlobMeta,
   CcProjectRow,
   CcSessionRow,
+  InboxRow,
   BlobMetaStore,
   DerivationRow,
   DerivationStore,
@@ -121,6 +122,15 @@ const MIGRATIONS: string[] = [
      created_at timestamptz not null,
      primary key (project_id, session_id)
    );`,
+  // The 「需求」 inbox: one row per material, private to whoever added it (not an event).
+  `create table ml_inbox (
+     id text primary key,
+     user_id text not null,
+     created_at timestamptz not null,
+     updated_at timestamptz not null,
+     doc jsonb not null
+   );
+   create index ml_inbox_user on ml_inbox (user_id, created_at desc);`,
 ];
 
 const MIGRATION_LOCK = 7_211_001;
@@ -550,6 +560,35 @@ export class PgAccountStore implements AccountStore {
        on conflict (project_id) do update set folder = excluded.folder, repo_path = excluded.repo_path, token_id = excluded.token_id, updated_at = excluded.updated_at`,
       [r.projectId, r.folder, r.repoPath, r.tokenId, r.updatedAt],
     );
+  }
+
+  async inbox(id: string): Promise<InboxRow | null> {
+    const r = await this.pool.query<{ id: string; user_id: string; created_at: Date; updated_at: Date; doc: unknown }>(
+      `select id, user_id, created_at, updated_at, doc from ${this.t}.ml_inbox where id = $1`,
+      [id],
+    );
+    const x = r.rows[0];
+    return x ? { id: x.id, userId: x.user_id, createdAt: x.created_at.toISOString(), updatedAt: x.updated_at.toISOString(), doc: x.doc } : null;
+  }
+
+  async inboxOf(userId: Id): Promise<InboxRow[]> {
+    const r = await this.pool.query<{ id: string; user_id: string; created_at: Date; updated_at: Date; doc: unknown }>(
+      `select id, user_id, created_at, updated_at, doc from ${this.t}.ml_inbox where user_id = $1 order by created_at desc`,
+      [userId],
+    );
+    return r.rows.map((x) => ({ id: x.id, userId: x.user_id, createdAt: x.created_at.toISOString(), updatedAt: x.updated_at.toISOString(), doc: x.doc }));
+  }
+
+  async putInbox(r: InboxRow): Promise<void> {
+    await this.pool.query(
+      `insert into ${this.t}.ml_inbox (id, user_id, created_at, updated_at, doc) values ($1, $2, $3, $4, $5)
+       on conflict (id) do update set updated_at = excluded.updated_at, doc = excluded.doc`,
+      [r.id, r.userId, r.createdAt, r.updatedAt, JSON.stringify(r.doc)],
+    );
+  }
+
+  async deleteInbox(id: string): Promise<void> {
+    await this.pool.query(`delete from ${this.t}.ml_inbox where id = $1`, [id]);
   }
 
   async ccSessions(projectId: Id): Promise<CcSessionRow[]> {

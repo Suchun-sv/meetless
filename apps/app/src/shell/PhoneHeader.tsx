@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { noDots, progressCard, type Id } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
-import { colors, space, type ColorName } from '@/theme';
+import { colors, space } from '@/theme';
+import { urgencyTone } from '@/ui/urgency';
 import { Icon, MenuSheet, Text, type MenuItem } from '@/components/ui';
 import { routeToHref, useApp } from '@/state';
-import { useHeaderActionList, type HeaderAction } from './chrome';
+import { useHeaderActionList, useHeaderBackOverride, type HeaderAction } from './chrome';
 import { ProjectSheet } from './ProjectSheet';
 import { useCurrent } from './useCurrent';
 import { useCcAvailable } from '@/features/chat/cc/useCcAvailable';
@@ -40,8 +41,10 @@ const SEGMENTS = [
 ] as const satisfies readonly { key: string; label: MessageKey; href: (pid: Id) => Href }[];
 
 /** Which phone header a path gets. */
-export function phoneHeaderKind(path: string): 'mine' | 'list' | 'project' | 'compact' {
+export function phoneHeaderKind(path: string): 'mine' | 'inbox' | 'list' | 'project' | 'compact' {
   if (path === '/') return 'mine';
+  // 需求 (mobile-v2 B1): the page draws its avatar and large title; no ask bar (decision 1).
+  if (path === '/inbox') return 'inbox';
   if (path === '/projects' || path === '/confirm') return 'list';
   const m = /^\/p\/[^/]+(\/[^/]+)?\/?$/.exec(path);
   if (m && (!m[1] || ['/board', '/lineage', '/artifacts', '/deliveries'].includes(m[1]))) return 'project';
@@ -56,9 +59,9 @@ function segmentOf(path: string): string {
   return s === 'lineage' ? 'trail' : s === 'need' ? 'board' : s;
 }
 
-/** Days left in colour (NOTES: ≤3 red, ≤7 amber, else grey). */
-export function daysColor(days: number): ColorName {
-  return days <= 3 ? 'danger' : days <= 7 ? 'warning' : 'textSecondary';
+/** Days left in colour: the shared five-level scheme (src/ui/urgency.ts, mine-v3). */
+export function daysStyle(days: number): { color: string } {
+  return { color: urgencyTone(days).fg };
 }
 
 function NavButton({ a }: { a: HeaderAction }) {
@@ -154,7 +157,7 @@ function ProjectHeader({ projectId }: { projectId: Id }) {
               {noDots(pc.round.title) || t('round', { n: pc.round.n })}
             </Text>
             {pc.daysLeft !== null ? (
-              <Text size="md" tight color={daysColor(pc.daysLeft)}>
+              <Text size="md" tight style={daysStyle(pc.daysLeft)}>
                 {pc.daysLeft >= 0 ? t('round.left', { n: pc.daysLeft }) : t('round.over', { n: -pc.daysLeft })}
               </Text>
             ) : null}
@@ -204,8 +207,9 @@ export function PhoneHeader() {
   const router = useRouter();
   const cur = useCurrent();
   const actions = useHeaderActionList();
+  const backOverride = useHeaderBackOverride();
   const kind = phoneHeaderKind(cur.path);
-  if (kind === 'mine') return <MineHeader />;
+  if (kind === 'mine' || kind === 'inbox') return <MineHeader />;
   if (kind === 'project' && cur.projectId) return <ProjectHeader projectId={cur.projectId} />;
   if (kind === 'list') {
     const projects = cur.path === '/projects';
@@ -224,18 +228,19 @@ export function PhoneHeader() {
       </View>
     );
   }
-  // Compact: ‹ parent and the page's title.
+  // Compact: ‹ parent and the page's title. A material (/inbox/:id) goes back to 需求.
   const pid = cur.projectId;
-  const parent = pid ? noDots(live.projects[pid]?.name ?? '') : t('nav.home');
+  const inInbox = cur.path.startsWith('/inbox/');
+  const parent = pid ? noDots(live.projects[pid]?.name ?? '') : inInbox ? t('nav.board') : t('nav.home');
   const goBack = () => {
     if (router.canGoBack()) router.back();
-    else router.navigate(pid ? routeToHref({ view: 'board', projectId: pid }) : '/');
+    else router.navigate(pid ? routeToHref({ view: 'board', projectId: pid }) : inInbox ? '/inbox' : '/');
   };
   const key = TITLE[cur.section];
   return (
     <View>
       <NavRow
-        back={{ label: parent, onPress: goBack }}
+        back={backOverride ?? { label: parent, onPress: goBack }}
         right={actions.map((a) => (
           <NavButton key={`${a.icon ?? a.text}-${a.label}`} a={a} />
         ))}

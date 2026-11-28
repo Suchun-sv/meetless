@@ -186,7 +186,119 @@ export interface ApiSpec {
   'cc.handoff': { req: { projectId: Id }; res: { commands: CcHandoffCommand[] } };
   /** The read-only code repo (a path on the server machine), kept server-side, not as an event. */
   'cc.repo': { req: { projectId: Id; repoPath: string | null }; res: { repoPath: string | null } };
+  // --- The 「需求」 inbox: materials with no project yet, the caller's own (server-side rows, not events).
+  'inbox.list': { req: Record<string, never>; res: { pending: InboxCard[]; recent: InboxCard[]; older: number; badge: number } };
+  /** A file or image is uploaded first (`bridge.uploadBlob`); its hash comes here. */
+  'inbox.add': { req: InboxAddReq; res: { id: string; rev: number; existing: boolean } };
+  /** With `rev`, waits (up to 20 s) while the material is analysing and still at that revision. */
+  'inbox.get': { req: { materialId: string; rev?: number }; res: InboxMaterial };
+  'inbox.commit': { req: { materialId: string } & InboxCommitReq; res: InboxCommitRes };
+  'inbox.undo': { req: { materialId: string }; res: { ok: true } };
+  'inbox.retry': { req: { materialId: string }; res: { rev: number } };
+  'inbox.remove': { req: { materialId: string }; res: { ok: true } };
 }
+
+export type InboxKind = 'text' | 'pdf' | 'docx' | 'image' | 'mail' | 'chat' | 'proposal';
+export type InboxStatus = 'analyzing' | 'ready' | 'committed' | 'empty' | 'failed';
+export type InboxStage = 'reading' | 'extracting' | 'routing' | 'checking' | 'done';
+export type InboxSource = 'paste' | 'file' | 'camera' | 'album' | 'drop' | 'share' | 'agent' | 'project';
+
+export interface InboxAddReq {
+  source: InboxSource;
+  text?: string;
+  blobHash?: string;
+  mediaType?: string;
+  fileName?: string;
+  /** Text the device already recognised in the image (iOS Vision); the server OCRs when absent. */
+  ocrText?: string;
+}
+
+export interface InboxItem {
+  id: string;
+  type: 'need' | 'hyp' | 'rev';
+  text: string;
+  due: IsoDate | null;
+  /** The sentence it came from, and where (「第 2 页」). */
+  quote: string | null;
+  page: number | null;
+  /** The suggested project; null = the suggested new project. */
+  projectId: Id | null;
+  /** The same thing as this existing need: 合并到. */
+  duplicateOf?: Id;
+  /** Contradicts an existing need (its deadline). */
+  conflict?: { needId: Id; field: 'due'; old: IsoDate | null; new: IsoDate };
+  /** The existing need a revision changes. */
+  revNeedId?: Id;
+}
+
+export interface InboxRouting {
+  /** [0] is the suggestion; the rest are 也可能是. Empty with `newProject` = suggest a new project. */
+  candidates: { projectId: Id; reason: string; reasonBold?: string[]; roundId?: Id }[];
+  newProject?: { name: string; reason: string; firstRound: { title: string; due: IsoDate | null; quote: string | null } | null; template: 'activity' | 'paper' | 'course' | null };
+}
+
+export interface InboxCommitSummary {
+  batchId: string;
+  projectIds: Id[];
+  created: number;
+  merged: number;
+  changedDue: number;
+  /** Existing needs revised by the material. */
+  revised: number;
+  undoUntil: IsoTime;
+}
+
+export interface InboxMaterial {
+  id: string;
+  rev: number;
+  kind: InboxKind;
+  title: string;
+  source: InboxSource;
+  addedAt: IsoTime;
+  status: InboxStatus;
+  stage: InboxStage;
+  /** Pages read so far; null = no pages (pasted text, chat): an indeterminate bar. */
+  progress: { page: number; pages: number } | null;
+  pages?: number;
+  size?: number;
+  mediaType?: string;
+  summary: string | null;
+  due?: { date: IsoDate; quote: string | null };
+  items: InboxItem[];
+  routing: InboxRouting | null;
+  error?: { code: 'NO_TEXT' | 'TOO_LARGE' | 'UNREADABLE' | 'OCR_FAILED' | 'AI_FAILED' | 'TIMEOUT'; message: string };
+  committed?: (InboxCommitSummary & { at: IsoTime }) | null;
+}
+
+export interface InboxCard {
+  id: string;
+  kind: InboxKind;
+  title: string;
+  source: InboxSource;
+  addedAt: IsoTime;
+  status: InboxStatus;
+  stage?: InboxStage;
+  progress?: { page: number; pages: number } | null;
+  counts: { items: number; projects: number; duplicates: number; conflicts: number };
+  projectIds: Id[];
+  committed?: { projectIds: Id[]; count: number };
+  error?: { code: string; message: string };
+}
+
+export interface InboxCommitReq {
+  items: {
+    itemId: string;
+    action: 'accept' | 'merge' | 'skip';
+    target: { projectId: Id } | { newProject: true };
+    due?: IsoDate | null;
+    mergeInto?: Id;
+    /** A due conflict: keep the existing need's deadline, or apply the new one. */
+    conflict?: 'keep' | 'apply';
+  }[];
+  newProject?: { name: string; firstRound: { title: string; due: IsoDate | null } | null; template: 'activity' | 'paper' | 'course' | null };
+}
+
+export type InboxCommitRes = InboxCommitSummary;
 
 export type CcState = 'idle' | 'running_here' | 'in_use_elsewhere';
 

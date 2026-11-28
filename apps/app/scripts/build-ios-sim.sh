@@ -11,6 +11,8 @@
 # The screenshot env vars are inlined at bundle time into this build only; normal builds never set them.
 set -euo pipefail
 export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH LANG=en_US.UTF-8
+# Keep the Mac awake (idle sleep) for as long as this script runs: a sleeping Mac kills the build.
+caffeinate -i -w $$ &
 W=${ML_WORKTREE:-$HOME/github/meetless-expo}
 B=${ML_BUILD_DIR:-$HOME/meetless-expo-build}
 REF=${ML_REF:-origin/expo}

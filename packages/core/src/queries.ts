@@ -170,7 +170,7 @@ export function questions(s: State, userId: Id, projectId: Id | null, today: Iso
       if (w.needId === null && !w.ignored && w.by === userId) out.push({ kind: 'unlinked', projectId: pid, workId: w.id });
     }
     const r = currentRound(s, pid);
-    if (!r) continue;
+    if (!r || r.span) continue;
     const left = daysBetween(today, r.due);
     if (left < 0 || left > STALE_DUE_DAYS) continue;
     // The delegate's decision moves a conflict-decision handoff to `done`; the conflict check also covers a

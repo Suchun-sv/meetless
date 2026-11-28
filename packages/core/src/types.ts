@@ -107,6 +107,8 @@ export interface Round {
   start: IsoDate;
   due: IsoDate;
   status: RoundStatus;
+  /** A period or calendar item (a trip from start to due), not a deadline: never urgent or overdue. Absent = a deadline. */
+  span?: boolean;
   /** Planned delivery items while not delivered (draft); frozen on delivery. */
   items: string[];
   delivery: Delivery | null;

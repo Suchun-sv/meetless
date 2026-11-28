@@ -65,7 +65,7 @@ export function aiConfigFromEnv(env: Record<string, string | undefined>): AiConf
 /** One usage line per model call: counts and timing only, never content or the key. */
 export interface AiUsageLine {
   ev: 'ai.call';
-  kind: 'answer' | 'classify' | 'extract';
+  kind: 'answer' | 'classify' | 'extract' | 'route';
   userId: Id;
   ok: boolean;
   reason: AgentFallback | null;
@@ -187,7 +187,8 @@ export function buildContext(view: State, req: AgentRequest): { text: string; so
     if (!p) continue;
     const r = currentRound(view, pid);
     const members = p.memberIds.map((m) => view.users[m]?.displayName ?? m).join(', ');
-    header.push(`project "${p.name}"${r ? ` | current round ${r.n} "${r.title}" due ${r.due} (${daysBetween(req.today, r.due)} days left)` : ''} | members: ${members}`);
+    const when = r?.span ? `a period from ${r.start} to ${r.due} (not a deadline)` : r ? `due ${r.due} (${daysBetween(req.today, r.due)} days left)` : '';
+    header.push(`project "${p.name}"${r ? ` | current round ${r.n} "${r.title}" ${when}` : ''} | members: ${members}`);
   }
   return { text: `${header.join('\n')}\n\n${blocks.join('\n\n')}`, sources };
 }
@@ -616,6 +617,16 @@ export class ProjectAi {
 
   get model(): string | null {
     return this.cfg?.model ?? null;
+  }
+
+  /** One JSON-mode call with the caller's own prompts (the inbox's routing): the reply text, or null. */
+  async json(userId: Id, kind: AiUsageLine['kind'], system: string, user: string, maxTokens = 1200): Promise<string | null> {
+    const out = await this.run(userId, kind, [{ role: 'system', content: system }, { role: 'user', content: user }], {
+      response_format: { type: 'json_object' },
+      max_tokens: maxTokens,
+      temperature: 0,
+    });
+    return out.ok ? out.text : null;
   }
 
   private async complete(cfg: AiConfig, messages: Msg[], extra: Record<string, unknown> = {}): Promise<Completion> {

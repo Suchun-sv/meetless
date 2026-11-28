@@ -37,6 +37,14 @@
             "enableSceneSupport": true
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "拍照收进需求",
+          "photosPermission": "从相册选图片收进需求",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

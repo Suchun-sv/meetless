@@ -6,6 +6,7 @@ import { colors, layout, useLayout } from '@/theme';
 import { Notices } from '@/components/ui';
 import { ChatDock } from '@/slots/ChatDock';
 import { ReminderSync } from '@/features/reminders/ui/sync';
+import { InboxDoneBar } from '@/features/inbox/ui/DoneBar';
 import { PhoneHeader, phoneHeaderKind } from './PhoneHeader';
 import { Sidebar } from './Sidebar';
 import { TabBar } from './TabBar';
@@ -56,7 +57,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <ReminderSync />
       <PhoneHeader />
       <View style={styles.content}>{children}</View>
-      {kind === 'mine' || kind === 'project' ? <ChatDock /> : null}
+      {/* 「《…》分析完了」 shows on every page once: ChatDock and B1 mount it themselves, the rest get it here. */}
+      {kind === 'mine' || kind === 'project' ? <ChatDock /> : kind === 'inbox' ? null : <InboxDoneBar />}
       <TabBar />
       <Notices bottom={56} />
     </View>

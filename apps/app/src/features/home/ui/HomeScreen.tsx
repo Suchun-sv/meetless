@@ -7,15 +7,15 @@ import { cardStamp } from '../../dashboard/model/cards';
 import { CardGrid, DashCard } from '../../dashboard/ui/CardGrid';
 import { homeView } from '../model/home';
 import { HomeCard } from './HomeCards';
-import { HomeMobile } from './HomeMobile';
+import { MineScreen } from './mine/MineScreen';
 
 /**
  * 「我的」: how much is waiting across how many projects, then the card grid. With no projects,
  * an empty state that points at creating one.
  */
 export function HomeScreen() {
-  // Narrow screens get the mobile-v1 我的 (deadlines and their needs, no cards, no gantt).
-  return useLayout().phone ? <HomeMobile /> : <HomeWide />;
+  // Narrow screens get mine-v3: calendar or timeline over the deadline agenda; wide is unchanged.
+  return useLayout().phone ? <MineScreen /> : <HomeWide />;
 }
 
 function HomeWide() {

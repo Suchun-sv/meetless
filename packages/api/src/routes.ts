@@ -63,6 +63,13 @@ export const API_ROUTES = {
   'cc.approve': { method: 'POST', path: '/v1/projects/:projectId/cc/approve', auth: 'user', from: ['app'] },
   'cc.handoff': { method: 'GET', path: '/v1/projects/:projectId/cc/handoff', auth: 'user', from: ['app'] },
   'cc.repo': { method: 'POST', path: '/v1/projects/:projectId/cc/repo', auth: 'user', from: ['app'] },
+  'inbox.list': { method: 'GET', path: '/v1/inbox', auth: 'user', from: ['app'] },
+  'inbox.add': { method: 'POST', path: '/v1/inbox', auth: 'user', from: ['app'] },
+  'inbox.get': { method: 'GET', path: '/v1/inbox/:materialId', auth: 'user', from: ['app'] },
+  'inbox.commit': { method: 'POST', path: '/v1/inbox/:materialId/commit', auth: 'user', from: ['app'] },
+  'inbox.undo': { method: 'POST', path: '/v1/inbox/:materialId/undo', auth: 'user', from: ['app'] },
+  'inbox.retry': { method: 'POST', path: '/v1/inbox/:materialId/retry', auth: 'user', from: ['app'] },
+  'inbox.remove': { method: 'DELETE', path: '/v1/inbox/:materialId', auth: 'user', from: ['app'] },
 } as const satisfies Record<ApiName, RouteDef>;
 
 type FromOf<K extends ApiName> = (typeof API_ROUTES)[K]['from'][number];

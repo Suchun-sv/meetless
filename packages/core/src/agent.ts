@@ -221,7 +221,7 @@ export function answer(view: State, req: AgentRequest): AgentReply {
     }
     const pids = projectId ? [projectId] : myProjectIds(view, userId);
     const items = pids
-      .flatMap((pid) => projectRounds(view, pid).filter((r) => r.status !== 'delivered' && r.due >= win.from && r.due <= win.to))
+      .flatMap((pid) => projectRounds(view, pid).filter((r) => r.status !== 'delivered' && !r.span && r.due >= win.from && r.due <= win.to))
       .sort((a, b) => a.due.localeCompare(b.due))
       .map((r) => ({ projectId: r.projectId, roundId: r.id, daysLeft: daysBetween(today, r.due) }));
     return reply({ intent: 'deadlines', items, cites: items.map((i) => i.roundId) });
@@ -259,7 +259,7 @@ export function answer(view: State, req: AgentRequest): AgentReply {
       if (items.some((i) => i.needId === m.needId)) continue;
       const n = view.needs[m.needId]!;
       const r = n.roundId ? view.rounds[n.roundId] : null;
-      items.push({ kind: 'mine', projectId: m.projectId, id: m.needId, needId: m.needId, daysLeft: r ? daysBetween(today, r.due) : null });
+      items.push({ kind: 'mine', projectId: m.projectId, id: m.needId, needId: m.needId, daysLeft: r && !r.span ? daysBetween(today, r.due) : null });
     }
     const rank = { conflict: 0, toMe: 1, stale: 2, proposal: 3, confirm: 3, mine: 4 } as const;
     items.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.daysLeft ?? 99) - (b.daysLeft ?? 99));
@@ -291,7 +291,7 @@ export function answer(view: State, req: AgentRequest): AgentReply {
   let round: { roundId: Id; daysLeft: number } | null = null;
   for (const pid of pids) {
     const r = currentRound(view, pid);
-    if (projectId && r) round = { roundId: r.id, daysLeft: daysBetween(today, r.due) };
+    if (projectId && r && !r.span) round = { roundId: r.id, daysLeft: daysBetween(today, r.due) };
     for (const n of projectNeeds(view, pid)) {
       if (n.privateTo !== null || (r && n.roundId !== r.id)) continue;
       if (n.status === 'doing' || n.status === 'partial' || n.status === 'testing') counts.doing++;

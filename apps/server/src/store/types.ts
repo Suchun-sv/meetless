@@ -135,6 +135,15 @@ export interface CcSessionRow {
   createdAt: IsoTime;
 }
 
+/** A material in someone's 「需求」 inbox (no project yet): its whole record as JSON (src/inbox). */
+export interface InboxRow {
+  id: string;
+  userId: Id;
+  createdAt: IsoTime;
+  updatedAt: IsoTime;
+  doc: unknown;
+}
+
 /** One MCP call, logged for the agent activity view. */
 export type AgentCallRow = AgentCall & { userId: Id };
 
@@ -173,5 +182,10 @@ export interface AccountStore {
   /** Newest first. */
   ccSessions(projectId: Id): Promise<CcSessionRow[]>;
   putCcSession(r: CcSessionRow): Promise<void>;
+  inbox(id: string): Promise<InboxRow | null>;
+  /** The user's materials, newest first. */
+  inboxOf(userId: Id): Promise<InboxRow[]>;
+  putInbox(r: InboxRow): Promise<void>;
+  deleteInbox(id: string): Promise<void>;
   close(): Promise<void>;
 }

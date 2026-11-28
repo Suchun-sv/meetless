@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Pressable } from 'react-native';
 import { StyleSheet, View } from 'react-native';
-import { daysBetween, projectRounds, SEP, type Id, type Round } from '@meetless/core';
+import { daysBetween, projectRounds, SEP, type EventPayloads, type Id, type Round } from '@meetless/core';
 import type { MessageKey } from '@meetless/i18n';
 import { canSubmitRound, ddlStart, nextRoundDraft, roundCreateCommand, roundDraftError, roundUpdateCommand, type RoundDraft } from '@renderer/setup/model';
 import { Button, Screen, Text, TextField } from '@/components/ui';
@@ -11,6 +12,21 @@ import { ProjectTimeline } from '../../timeline/ui/ProjectTimeline';
 import { DateField, H2 } from './fields';
 
 const STATUS_COLOR = { current: 'info', planned: 'textSecondary', delivered: 'success' } as const;
+
+/** 「这是一个时间段（不是截止）」: a span (a trip, a block of days) is drawn striped and never counts as due. */
+function SpanSwitch({ on, onChange, testID }: { on: boolean; onChange: (v: boolean) => void; testID: string }) {
+  const { t } = useApp();
+  return (
+    <Pressable accessibilityRole="switch" accessibilityState={{ checked: on }} onPress={() => onChange(!on)} hitSlop={6} style={styles.sw} testID={testID}>
+      <View style={[styles.track, on && styles.trackOn]}>
+        <View style={[styles.knob, on && styles.knobOn]} />
+      </View>
+      <Text size="sm" color="textSecondary" tight>
+        {t('pj.span')}
+      </Text>
+    </Pressable>
+  );
+}
 
 function RoundFields({ prefix, draft, onChange }: { prefix: string; draft: RoundDraft; onChange: (d: RoundDraft) => void }) {
   const { t } = useApp();
@@ -41,6 +57,8 @@ export function RoundsScreen() {
   const [editDraft, setEditDraft] = useState<RoundDraft | null>(null);
   const [editTried, setEditTried] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
+  const [addSpan, setAddSpan] = useState(false);
+  const [editSpan, setEditSpan] = useState(false);
 
   if (!live.projects[projectId])
     return (
@@ -54,16 +72,18 @@ export function RoundsScreen() {
     if (!canSubmitRound(t, draft, addBusy)) return;
     const cmd = roundCreateCommand(projectId, draft, newId('rnd'), ddlStart(rounds, draft.due, today));
     setAddBusy(true);
-    const r = await submit(cmd.type, cmd.payload);
+    const r = await submit('round.created', { ...(cmd.payload as EventPayloads['round.created']), ...(addSpan ? { span: true } : {}) });
     setAddBusy(false);
     if (r.kind !== 'rejected') {
       setAddTried(false);
+      setAddSpan(false);
       setDraft(nextRoundDraft([...rounds, { due: draft.due } as Round], today));
     }
   };
   const startEdit = (r: Round) => {
     setEditing(r.id);
     setEditDraft({ title: r.title, kind: r.kind, start: r.start, due: r.due });
+    setEditSpan(r.span === true);
     setEditTried(false);
   };
   const saveEdit = async (r: Round) => {
@@ -71,9 +91,10 @@ export function RoundsScreen() {
     setEditTried(true);
     if (!canSubmitRound(t, editDraft, editBusy)) return;
     const cmd = roundUpdateCommand(r, editDraft);
-    if (!cmd) return setEditing(null);
+    const spanChanged = editSpan !== (r.span === true);
+    if (!cmd && !spanChanged) return setEditing(null);
     setEditBusy(true);
-    const res = await submit(cmd.type, cmd.payload);
+    const res = await submit('round.updated', { ...((cmd?.payload ?? { roundId: r.id }) as EventPayloads['round.updated']), ...(spanChanged ? { span: editSpan || null } : {}) });
     setEditBusy(false);
     if (res.kind !== 'rejected') setEditing(null);
   };
@@ -96,6 +117,7 @@ export function RoundsScreen() {
                 {isEditing ? (
                   <View style={{ gap: space[2] }}>
                     <RoundFields prefix="round-edit" draft={editDraft} onChange={setEditDraft} />
+                    <SpanSwitch on={editSpan} onChange={setEditSpan} testID="round-edit-span" />
                     {editTried && roundDraftError(t, editDraft) ? (
                       <Text size="sm" color="danger" testID="round-edit-error">
                         {roundDraftError(t, editDraft)!}
@@ -130,6 +152,7 @@ export function RoundsScreen() {
       <H2>{t('pj.addRound')}</H2>
       <View style={{ gap: space[2] }}>
         <RoundFields prefix="round" draft={draft} onChange={setDraft} />
+        <SpanSwitch on={addSpan} onChange={setAddSpan} testID="round-span" />
         {addError ? (
           <Text size="sm" color="danger" testID="round-error">
             {addError}
@@ -142,6 +165,11 @@ export function RoundsScreen() {
 }
 
 const styles = StyleSheet.create({
+  sw: { flexDirection: 'row', alignItems: 'center', gap: space[2], alignSelf: 'flex-start' },
+  track: { width: 30, height: 18, borderRadius: 9, backgroundColor: colors.borderStrong, padding: 2 },
+  trackOn: { backgroundColor: colors.text },
+  knob: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.bg },
+  knobOn: { transform: [{ translateX: 12 }] },
   fields: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], alignItems: 'center' },
   line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[2] },
   round: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: space[3], backgroundColor: colors.bg },

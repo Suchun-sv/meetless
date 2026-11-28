@@ -4,6 +4,7 @@ import { agentGuideGet } from '../accounts/guide';
 import { ApiError, defineRoute, type ApiDeps, type Handler } from './frame';
 import { ACCOUNT_HANDLERS } from './routes-accounts';
 import { CC_HANDLERS } from './routes-cc';
+import { INBOX_HANDLERS } from './routes-inbox';
 import { AGENT_HANDLERS } from './routes-agent';
 import { TOKEN_HANDLERS } from './routes-tokens';
 import { INPUT_HANDLERS } from './routes-inputs';
@@ -50,6 +51,7 @@ export const HANDLERS: Partial<{ [K in ApiName]: Handler<K> }> = {
   ...READ_HANDLERS,
   ...WRITE_HANDLERS,
   ...CC_HANDLERS,
+  ...INBOX_HANDLERS,
 };
 
 const notImplemented = async (): Promise<never> => {

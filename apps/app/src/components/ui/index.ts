@@ -14,3 +14,4 @@ export { Notices } from './Notices';
 export { Icon, type IconName } from './Icon';
 export { MenuSheet, type MenuItem } from './MenuSheet';
 export { NeedRow, CheckCircle, statusColor, type NeedRowProps } from './NeedRow';
+export { ClipboardOffer, type Pasted } from './ClipboardOffer';

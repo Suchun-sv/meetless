@@ -57,12 +57,12 @@ export function claudeMd(s: State, p: Project): string {
     '## 项目',
     `- 项目 ID：${p.id}（调用 meetless MCP 工具时用它）`,
     `- 目标：${p.description.trim() || '（未填写）'}`,
-    `- 当前截止：${current ? `${current.title}，${current.due}` : '（没有进行中的截止）'}`,
+    current?.span ? `- 当前时间段：${current.title}，${current.start} 到 ${current.due}（不是截止）` : `- 当前截止：${current ? `${current.title}，${current.due}` : '（没有进行中的截止）'}`,
   ];
   const others = rounds.filter((r) => r !== current);
   if (others.length) {
     lines.push('- 其他截止：');
-    for (const r of others) lines.push(`  - ${r.title}，${r.due}，${STATUS[r.status]}`);
+    for (const r of others) lines.push(`  - ${r.title}，${r.span ? `${r.start} 到 ${r.due}，时间段` : r.due}，${STATUS[r.status]}`);
   }
   lines.push(`- 成员：${members.join('、') || '（无）'}`);
   lines.push(
