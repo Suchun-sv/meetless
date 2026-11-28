@@ -4,7 +4,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, NeedRow, statusColor, Text } from '@/components/ui';
+import { Button, CheckCircle, NeedRow, statusColor, Text } from '@/components/ui';
 import { statusCommand } from '../model/edit';
 import { runCmds } from '../../confirm/model/run';
 import { useApp, useGo } from '@/state';
@@ -15,7 +15,8 @@ import { mobileNeedsVM, type DeadlineGroup, type NeedRow as Row, type NextReason
 /** Bottom room for the ask bar and the tab bar (mobile-v1 decision 3). */
 export const MOBILE_BOTTOM = 160;
 
-function reasonText(t: ReturnType<typeof useApp>['t'], r: NextReason, name: (id: Id) => string): string {
+function reasonText(t: ReturnType<typeof useApp>['t'], n: Need, r0: NextReason, name: (id: Id) => string): string {
+  const r = n.privateTo !== null ? { ...r0, code: `${r0.code} ${t('pv.mine')}` } : r0;
   switch (r.kind) {
     case 'handoff':
       return `${r.code} ${t('ho.from', { who: name(r.h.fromId) })} ${t(`ho.st.${r.h.state}`)}`;
@@ -48,20 +49,31 @@ function HypLine({ row, onOpen, divider }: { row: Row; onOpen: (n: Need) => void
       setBusy(false);
     }
   };
-  const done = n.status === 'held';
+  const done = n.status === 'held' || n.status === 'met';
   return (
     <View style={[styles.rowPad, { paddingLeft: space[5] + (row.nested ? 32 : 0) }]}>
       <Pressable testID="m-need" accessibilityRole="button" onPress={() => onOpen(n)} style={({ pressed }) => [styles.hrow, divider && styles.hdiv, pressed && { opacity: 0.6 }]}>
-        <View style={styles.noCheck} />
+        {n.kind === 'ext' ? <CheckCircle needId={n.id} /> : <View style={styles.noCheck} />}
         <Text mono size="sm" color="textTertiary" tight style={styles.hcode}>
           {n.code}
         </Text>
+        {n.privateTo !== null ? (
+          <Text size="xs" color="textSecondary" tight>
+            {t('pv.mine')}
+          </Text>
+        ) : null}
         <Text size="md" color={done ? 'textTertiary' : 'text'} numberOfLines={1} style={{ flex: 1 }} tight>
           {n.title}
         </Text>
-        <Pressable testID="m-hyp-status" accessibilityRole="button" disabled={busy} hitSlop={10} onPress={() => setMenu((m) => !m)}>
-          <Text size="sm" tight color={statusColor(n.status)}>{`${t(`st.${n.status}`)} ⌄`}</Text>
-        </Pressable>
+        {n.kind === 'hyp' ? (
+          <Pressable testID="m-hyp-status" accessibilityRole="button" disabled={busy} hitSlop={10} onPress={() => setMenu((m) => !m)}>
+            <Text size="sm" tight color={statusColor(n.status)}>{`${t(`st.${n.status}`)} ⌄`}</Text>
+          </Pressable>
+        ) : (
+          <Text size="sm" tight color={statusColor(n.status)}>
+            {t(`st.${n.status}`)}
+          </Text>
+        )}
       </Pressable>
       {menu ? (
         <View testID="m-hyp-menu" style={styles.menu}>
@@ -81,7 +93,7 @@ function HypLine({ row, onOpen, divider }: { row: Row; onOpen: (n: Need) => void
 
 /** A need row: an external need is the shell's NeedRow (check circle with undo); a hypothesis is `HypLine`. */
 function NeedLine({ row, onOpen, divider }: { row: Row; onOpen: (n: Need) => void; divider?: boolean }) {
-  if (row.need.kind === 'hyp') return <HypLine row={row} onOpen={onOpen} divider={divider} />;
+  if (row.need.kind === 'hyp' || row.need.privateTo !== null) return <HypLine row={row} onOpen={onOpen} divider={divider} />;
   return (
     <View style={styles.rowPad}>
       <NeedRow testID="m-need" needId={row.need.id} depth={row.nested ? 1 : 0} divider={divider} onPress={() => onOpen(row.need)} />
@@ -151,7 +163,7 @@ export function NeedsMobile({ projectId }: { projectId: Id }) {
                   {s.need.title}
                 </Text>
                 <Text size="sm" color="textSecondary" numberOfLines={1}>
-                  {reasonText(t, s.reason, name)}
+                  {reasonText(t, s.need, s.reason, name)}
                 </Text>
               </View>
               <Text size="lg" color="textTertiary" tight>

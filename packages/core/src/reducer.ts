@@ -14,6 +14,7 @@ import {
   SOURCE_KINDS,
   WORK_EFFECTS,
   dashboardKey,
+  type AgentSnapshot,
   type ArtifactKind,
   type ChatMessage,
   type ChatThread,
@@ -91,6 +92,37 @@ function date(v: unknown, field: string): IsoDate {
 }
 
 const BLOB = /^sha256:[0-9a-f]{64}$/;
+
+/** Phase 2's reserved `round.delivered.agentSnapshot`, checked for shape only. */
+function agentSnapshot(v: unknown): AgentSnapshot {
+  const bad = (): never => {
+    throw new DomainError('INVALID_EVENT', 'agentSnapshot');
+  };
+  const o = (x: unknown): Record<string, unknown> => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : bad());
+  const s = (x: unknown): string => (typeof x === 'string' && x.length > 0 && x.length <= 2000 ? x : bad());
+  const a = o(v);
+  const src = o(a.source);
+  const kind = src.agentKind === 'claude-code' || src.agentKind === 'codex' ? src.agentKind : bad();
+  const format = a.transcriptFormat === 'claude-jsonl' || a.transcriptFormat === 'codex-jsonl' ? a.transcriptFormat : bad();
+  if (typeof a.transcriptBlob !== 'string' || !BLOB.test(a.transcriptBlob)) bad();
+  const repo = a.repo === null ? null : ((r) => ({ remote: s(r.remote), commit: s(r.commit) }))(o(a.repo));
+  const out: AgentSnapshot = {
+    source: { host: s(src.host), agentKind: kind, sessionId: s(src.sessionId), cwd: s(src.cwd) },
+    transcriptBlob: a.transcriptBlob as string,
+    transcriptFormat: format,
+    repo,
+    capturedAt: s(a.capturedAt),
+  };
+  if (a.redactions !== undefined) {
+    if (!Array.isArray(a.redactions)) bad();
+    out.redactions = (a.redactions as unknown[]).map((x) => {
+      const r = o(x);
+      const count = typeof r.count === 'number' && Number.isSafeInteger(r.count) && r.count >= 0 ? r.count : bad();
+      return { kind: s(r.kind), count, ...(r.note === undefined ? {} : { note: s(r.note) }) };
+    });
+  }
+  return out;
+}
 
 /** Longest project name `project.renamed` takes, in code points (CJK and astral characters count once). */
 const PROJECT_NAME_MAX = 80;
@@ -507,6 +539,7 @@ const handlers: Handlers = {
     }
     r.status = 'delivered';
     r.delivery = { items: (p.items ?? r.items).map((x) => text(x, 'item')), account, date: date(p.date, 'date'), by: e.actorId, seq: e.seq };
+    if (p.agentSnapshot !== undefined) r.delivery.agentSnapshot = agentSnapshot(p.agentSnapshot);
     if (wasCurrent) {
       const next = Object.values(s.rounds)
         .filter((x) => x.projectId === r.projectId && x.status === 'planned' && x.n > r.n)

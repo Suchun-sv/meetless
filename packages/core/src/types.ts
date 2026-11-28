@@ -77,6 +77,24 @@ export interface Delivery {
   date: IsoDate;
   by: Id;
   seq: Seq;
+  /** Phase 2 (reserved): the working agent's session frozen at delivery. */
+  agentSnapshot?: AgentSnapshot;
+}
+
+/**
+ * Reserved for phase 2: the session of the agent that did the work, wherever it ran (a Paseo or
+ * Claude Code session on another machine, later Codex), frozen when a round is delivered. Not the
+ * server's own project session. The transcript is an immutable blob addressed by its hash.
+ */
+export interface AgentSnapshot {
+  source: { host: string; agentKind: 'claude-code' | 'codex'; sessionId: string; cwd: string };
+  /** `sha256:<hex>` of the transcript blob. */
+  transcriptBlob: string;
+  transcriptFormat: 'claude-jsonl' | 'codex-jsonl';
+  repo: { remote: string; commit: string } | null;
+  capturedAt: IsoTime;
+  /** What was taken out before storing (secrets, items private to someone). */
+  redactions?: { kind: string; count: number; note?: string }[];
 }
 
 export interface Round {

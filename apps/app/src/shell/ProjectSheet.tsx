@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import type { Id } from '@meetless/core';
 import { renameCommand } from '@renderer/shell/rename';
 import { space } from '@/theme';
 import { Button, Divider, Sheet, Text, TextField } from '@/components/ui';
 import { useApp } from '@/state';
+import { RepoPathField } from '@/features/chat/cc/CcHandoff';
+import { useCcAvailable } from '@/features/chat/cc/useCcAvailable';
 
 /**
  * Project settings from the tree (the 「项目设置」 link or a long press): rename, and archive
  * (off the tree and Home, still readable under 「已归档」, nothing deleted) or restore.
  */
 export function ProjectSheet({ projectId, onClose }: { projectId: Id | null; onClose: () => void }) {
-  const { live, t, submit } = useApp();
+  const { live, t, submit, me } = useApp();
+  const ccOn = useCcAvailable(projectId ?? 'home') === true;
   const router = useRouter();
   const project = projectId ? live.projects[projectId] : undefined;
   const [draft, setDraft] = useState('');
@@ -56,6 +59,21 @@ export function ProjectSheet({ projectId, onClose }: { projectId: Id | null; onC
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Button label={t('pj.rename')} variant="primary" size="sm" busy={busy} onPress={() => void rename()} testID="project-rename-save" />
       </View>
+      <Divider />
+      {/* Claude Code session (A3): the read-only repo the session sees, and continuing it elsewhere. */}
+      {ccOn ? <RepoPathField projectId={projectId} /> : null}
+      {ccOn && project.createdBy === me ? (
+        <Button
+          label={t('cc.handoff.title')}
+          size="sm"
+          style={{ alignSelf: 'flex-start' }}
+          onPress={() => {
+            onClose();
+            router.push(`/p/${encodeURIComponent(projectId)}/handoff?cc=1` as Href);
+          }}
+          testID="project-cc-handoff"
+        />
+      ) : null}
       <Divider />
       <View style={{ gap: space[2], paddingBottom: space[4] }}>
         <Text size="sm" color="textSecondary">

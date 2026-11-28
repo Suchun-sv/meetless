@@ -7,6 +7,7 @@ import { space } from '@/theme';
 import { HandoffBlock } from './HandoffBlock';
 import { HandoffForm } from './HandoffForm';
 import { LinkBox } from './LinkBox';
+import { CcHandoffBody } from '../chat/cc/CcHandoff';
 
 /** Handoffs in this project that involve me, waiting on me first, then newest. */
 function myHandoffs(hs: readonly Handoff[], me: string): Handoff[] {
@@ -25,7 +26,7 @@ export function HandoffScreen() {
   const projectId = useProjectId();
   const project = useProject();
   const router = useRouter();
-  const q = useLocalSearchParams<{ need?: string; to?: string; mode?: string }>();
+  const q = useLocalSearchParams<{ need?: string; to?: string; mode?: string; cc?: string }>();
   const needId = q.need ? String(q.need) : null;
   const need = needId ? live.needs[needId] : undefined;
   const back = () => {
@@ -34,6 +35,15 @@ export function HandoffScreen() {
   };
 
   if (!project) return <Screen title={t('cp.handoff')}>{<Text color="textSecondary">{t('xp.notFound')}</Text>}</Screen>;
+
+  // ⋯ › 在别处继续: resume the project's Claude Code session in a terminal or through Remote Control.
+  if (q.cc === '1') {
+    return (
+      <Screen title={t('cc.handoff.title')}>
+        <CcHandoffBody projectId={projectId} />
+      </Screen>
+    );
+  }
 
   if (needId && q.mode === 'link') {
     return (

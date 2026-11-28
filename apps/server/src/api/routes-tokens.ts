@@ -75,9 +75,10 @@ const agentSetupGet: Handler<'agentSetup.get'> = async ({ http, deps }) => agent
 /** Projects the caller (an agent token, in practice) may read. */
 const projectsList: Handler<'projects.list'> = async ({ p, deps }) => {
   const view = deps.service.view(p.userId);
-  const ids = readableProjectIds(view, p.userId);
+  // A project-scoped token sees its own project only.
+  const ids = [...readableProjectIds(view, p.userId)].filter((id) => !p.projectId || id === p.projectId);
   return {
-    projects: [...ids].map((id) => {
+    projects: ids.map((id) => {
       const proj = view.projects[id]!;
       return { id: proj.id, name: proj.name, sample: proj.sample };
     }),

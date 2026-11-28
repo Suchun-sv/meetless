@@ -77,8 +77,8 @@ export interface NeedRowProps {
 }
 
 /**
- * One need row (mobile-v1, 01/02/09): check circle, code (mono, grey), title (one line), status in
- * colour. Shared by 我的, the project 需求 list and 交付.
+ * One need row (mobile-v1, 01/02/09): check circle, code (mono, grey), 「仅你可见」 for a private need,
+ * title (one line), status in colour. Shared by 我的, the project 需求 list and 交付.
  */
 export function NeedRow({ needId, depth = 0, onPress, check = true, divider, testID }: NeedRowProps) {
   const { live, t } = useApp();
@@ -92,6 +92,11 @@ export function NeedRow({ needId, depth = 0, onPress, check = true, divider, tes
         <Text mono size="sm" color="textTertiary" style={styles.code} tight>
           {n.code}
         </Text>
+        {n.privateTo !== null ? (
+          <Text size="xs" color="textTertiary" tight testID="need-row-private">
+            {t('pv.mine')}
+          </Text>
+        ) : null}
         <Text size="md" color={done ? 'textTertiary' : 'text'} numberOfLines={1} style={{ flex: 1 }} tight>
           {n.title}
         </Text>

@@ -6,6 +6,10 @@ import { Segmented, Text } from '@/components/ui';
 import { colors, fontFor, fontSize, hasCjk, radius, space, tones, useLayout } from '@/theme';
 import { chipLabel } from '../model/chat';
 import { replyBlocks } from '../model/reply';
+import { CcDock, ModeRow } from '../cc/CcDock';
+import { getMode, setMode, type ChatMode } from '../cc/model';
+import { useCcAvailable } from '../cc/useCcAvailable';
+import { useCcSession } from '../cc/useCcSession';
 import { useComposer } from './composer';
 import { Thread } from './Thread';
 
@@ -24,6 +28,15 @@ export function ChatPanel({ scope, onDash, full, onExpand }: { scope: 'home' | I
   const [inputH, setInputH] = useState(INPUT_MIN);
   const { t, live, me, today, fmtDay, project, text, setText, priv, togglePriv, pending, attaching, msgs, chips, ph, ai, send, onKeyPress, onChip, attach } = useComposer(scope, onDash, () => setExpanded(true));
 
+  const [mode, setModeState] = useState<ChatMode>(() => (scope === 'home' ? 'ds' : getMode(scope)));
+  // Claude Code only when the server has it (no mock in production); otherwise DeepSeek, as before.
+  const ccOn = useCcAvailable(scope) === true;
+  const cc = scope !== 'home' && mode === 'cc' && ccOn;
+  const ccs = useCcSession(scope, cc);
+  const onMode = (m: ChatMode) => {
+    setModeState(m);
+    if (scope !== 'home') setMode(scope, m);
+  };
   const showThread = msgs.length > 0 || pending !== null;
   // The dock shows one line for the thread until expanded; the chat page always shows it all.
   const bar = !full && !expanded;
@@ -71,7 +84,9 @@ export function ChatPanel({ scope, onDash, full, onExpand }: { scope: 'home' | I
   return (
     <View style={[styles.wrap, full ? styles.full : styles.dock]} testID="composer">
       <View style={[styles.column, full && styles.fullColumn]}>
-        {showThread && bar && (
+        {project && ccOn && <ModeRow projectId={scope} mode={mode} onMode={onMode} s={cc ? ccs : null} />}
+        {cc && <CcDock projectId={scope} s={ccs} />}
+        {!cc && showThread && bar && (
           <Pressable accessibilityRole="button" testID="thread-bar" onPress={openBar} style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.bar, hovered && styles.chipPressed]}>
             <Text size="sm" weight="semibold" tight>
               {t('ch.agent')}
@@ -84,7 +99,7 @@ export function ChatPanel({ scope, onDash, full, onExpand }: { scope: 'home' | I
             </Text>
           </Pressable>
         )}
-        {showThread && !bar && (
+        {!cc && showThread && !bar && (
           <Thread
             scope={scope}
             pending={pending}
@@ -93,7 +108,7 @@ export function ChatPanel({ scope, onDash, full, onExpand }: { scope: 'home' | I
             onCollapse={full ? undefined : () => setExpanded(false)}
           />
         )}
-        {chips.length > 0 && !(showThread && !bar) && (
+        {!cc && chips.length > 0 && !(showThread && !bar) && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
             {chips.map((c) => (
               <Pressable
@@ -110,6 +125,7 @@ export function ChatPanel({ scope, onDash, full, onExpand }: { scope: 'home' | I
             ))}
           </ScrollView>
         )}
+        {!cc && (
         <View style={[styles.box, priv && styles.boxPriv]}>
           <View style={styles.inputRow}>
             {plus}
@@ -146,7 +162,8 @@ export function ChatPanel({ scope, onDash, full, onExpand }: { scope: 'home' | I
             </Pressable>
           </View>
         </View>
-        {ai && (!phone || full) && (
+        )}
+        {!cc && ai && (!phone || full) && (
           <Text size="xs" color="ai" testID="ai-note">
             {t('ch.aiNote')}
           </Text>

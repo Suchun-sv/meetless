@@ -6,6 +6,8 @@ import type {
   AppendContext,
   AppendOutcome,
   BlobMeta,
+  CcProjectRow,
+  CcSessionRow,
   BlobMetaStore,
   DerivationRow,
   DerivationStore,
@@ -102,6 +104,23 @@ const MIGRATIONS: string[] = [
      user_id text not null
    );
    create index ml_agent_calls_user_at on ml_agent_calls (user_id, at desc);`,
+  // A project's Claude Code session: project-scoped agent tokens, the project folder, its sessions.
+  `alter table ml_tokens add column project_id text;
+   create table ml_cc_projects (
+     project_id text primary key,
+     folder text not null,
+     repo_path text,
+     token_id text,
+     updated_at timestamptz not null
+   );
+   create table ml_cc_sessions (
+     project_id text not null,
+     session_id text not null,
+     name text not null,
+     transcript_path text not null,
+     created_at timestamptz not null,
+     primary key (project_id, session_id)
+   );`,
 ];
 
 const MIGRATION_LOCK = 7_211_001;
@@ -371,8 +390,9 @@ type TokenDbRow = {
   created_at: Date;
   last_used_at: Date | null;
   revoked_at: Date | null;
+  project_id: string | null;
 };
-const TOKEN_COLS = 'id, kind, user_id, label, token_hash, created_at, last_used_at, revoked_at';
+const TOKEN_COLS = 'id, kind, user_id, label, token_hash, created_at, last_used_at, revoked_at, project_id';
 const toTokenRow = (r: TokenDbRow): TokenRow => ({
   id: r.id,
   kind: r.kind,
@@ -382,6 +402,7 @@ const toTokenRow = (r: TokenDbRow): TokenRow => ({
   createdAt: r.created_at.toISOString(),
   lastUsedAt: r.last_used_at ? r.last_used_at.toISOString() : null,
   revokedAt: r.revoked_at ? r.revoked_at.toISOString() : null,
+  projectId: r.project_id,
 });
 
 type AgentCallDbRow = {
@@ -482,8 +503,8 @@ export class PgAccountStore implements AccountStore {
 
   async createToken(r: TokenRow): Promise<void> {
     await this.pool.query(
-      `insert into ${this.t}.ml_tokens (${TOKEN_COLS}) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [r.id, r.kind, r.userId, r.label, r.tokenHash, r.createdAt, r.lastUsedAt, r.revokedAt],
+      `insert into ${this.t}.ml_tokens (${TOKEN_COLS}) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [r.id, r.kind, r.userId, r.label, r.tokenHash, r.createdAt, r.lastUsedAt, r.revokedAt, r.projectId ?? null],
     );
   }
 
@@ -512,6 +533,39 @@ export class PgAccountStore implements AccountStore {
 
   async touchToken(id: Id, at: IsoTime): Promise<void> {
     await this.pool.query(`update ${this.t}.ml_tokens set last_used_at = $2 where id = $1`, [id, at]);
+  }
+
+  async ccProject(projectId: Id): Promise<CcProjectRow | null> {
+    const r = await this.pool.query<{ project_id: string; folder: string; repo_path: string | null; token_id: string | null; updated_at: Date }>(
+      `select project_id, folder, repo_path, token_id, updated_at from ${this.t}.ml_cc_projects where project_id = $1`,
+      [projectId],
+    );
+    const x = r.rows[0];
+    return x ? { projectId: x.project_id, folder: x.folder, repoPath: x.repo_path, tokenId: x.token_id, updatedAt: x.updated_at.toISOString() } : null;
+  }
+
+  async putCcProject(r: CcProjectRow): Promise<void> {
+    await this.pool.query(
+      `insert into ${this.t}.ml_cc_projects (project_id, folder, repo_path, token_id, updated_at) values ($1, $2, $3, $4, $5)
+       on conflict (project_id) do update set folder = excluded.folder, repo_path = excluded.repo_path, token_id = excluded.token_id, updated_at = excluded.updated_at`,
+      [r.projectId, r.folder, r.repoPath, r.tokenId, r.updatedAt],
+    );
+  }
+
+  async ccSessions(projectId: Id): Promise<CcSessionRow[]> {
+    const r = await this.pool.query<{ project_id: string; session_id: string; name: string; transcript_path: string; created_at: Date }>(
+      `select project_id, session_id, name, transcript_path, created_at from ${this.t}.ml_cc_sessions where project_id = $1 order by created_at desc`,
+      [projectId],
+    );
+    return r.rows.map((x) => ({ projectId: x.project_id, sessionId: x.session_id, name: x.name, transcriptPath: x.transcript_path, createdAt: x.created_at.toISOString() }));
+  }
+
+  async putCcSession(r: CcSessionRow): Promise<void> {
+    await this.pool.query(
+      `insert into ${this.t}.ml_cc_sessions (project_id, session_id, name, transcript_path, created_at) values ($1, $2, $3, $4, $5)
+       on conflict (project_id, session_id) do update set name = excluded.name, transcript_path = excluded.transcript_path`,
+      [r.projectId, r.sessionId, r.name, r.transcriptPath, r.createdAt],
+    );
   }
 
   async recordCall(r: AgentCallRow): Promise<void> {

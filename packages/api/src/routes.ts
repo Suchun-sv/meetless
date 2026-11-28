@@ -55,6 +55,14 @@ export const API_ROUTES = {
     from: ['mcp'],
   },
   'session.revoke': { method: 'DELETE', path: '/v1/session', auth: 'user', from: ['app'] },
+  'cc.status': { method: 'GET', path: '/v1/projects/:projectId/cc/status', auth: 'user', from: ['app'] },
+  'cc.history': { method: 'GET', path: '/v1/projects/:projectId/cc/history', auth: 'user', from: ['app'] },
+  'cc.turn': { method: 'POST', path: '/v1/projects/:projectId/cc/turn', auth: 'user', from: ['app'] },
+  'cc.events': { method: 'GET', path: '/v1/projects/:projectId/cc/events', auth: 'user', from: ['app'] },
+  'cc.cancel': { method: 'POST', path: '/v1/projects/:projectId/cc/cancel', auth: 'user', from: ['app'] },
+  'cc.approve': { method: 'POST', path: '/v1/projects/:projectId/cc/approve', auth: 'user', from: ['app'] },
+  'cc.handoff': { method: 'GET', path: '/v1/projects/:projectId/cc/handoff', auth: 'user', from: ['app'] },
+  'cc.repo': { method: 'POST', path: '/v1/projects/:projectId/cc/repo', auth: 'user', from: ['app'] },
 } as const satisfies Record<ApiName, RouteDef>;
 
 type FromOf<K extends ApiName> = (typeof API_ROUTES)[K]['from'][number];

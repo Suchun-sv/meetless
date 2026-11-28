@@ -71,6 +71,8 @@ export interface Principal {
   tokenId: Id | null;
   /** The token row's label; null for a dev token. */
   label: string | null;
+  /** A project-scoped agent token (a project's Claude Code session) reaches only this project. */
+  projectId?: Id | null;
   /**
    * How the token arrived: an `Authorization: Bearer` header, or the web session cookie
    * (`ml_session`, design 2026-11-25 §3). Set by `authenticateRequest`, the only place that
@@ -121,7 +123,7 @@ export class Authenticator {
       if (!row || row.kind !== kind) return { error: 'UNAUTHENTICATED' };
       if (row.revokedAt) return { error: 'TOKEN_REVOKED' };
       await this.accounts.touchToken(row.id, this.now().toISOString());
-      return { userId: row.userId, kind: row.kind, tokenId: row.id, label: row.label };
+      return { userId: row.userId, kind: row.kind, tokenId: row.id, label: row.label, projectId: row.projectId ?? null };
     }
     const u = this.dev?.byTokenValue(token) ?? null;
     return u ? { userId: u.id, kind: 'dev', tokenId: null, label: null } : { error: 'UNAUTHENTICATED' };

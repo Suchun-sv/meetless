@@ -5,6 +5,8 @@ import type {
   AppendContext,
   AppendOutcome,
   BlobMeta,
+  CcProjectRow,
+  CcSessionRow,
   BlobMetaStore,
   DerivationRow,
   DerivationStore,
@@ -121,6 +123,28 @@ export class MemoryAccountStore implements AccountStore {
   private tokens = new Map<Id, TokenRow>();
   private tokensByHash = new Map<string, Id>();
   private calls: AgentCallRow[] = [];
+  private cc = new Map<Id, CcProjectRow>();
+  private ccSess: CcSessionRow[] = [];
+
+  async ccProject(projectId: Id): Promise<CcProjectRow | null> {
+    const r = this.cc.get(projectId);
+    return r ? { ...r } : null;
+  }
+
+  async putCcProject(r: CcProjectRow): Promise<void> {
+    this.cc.set(r.projectId, { ...r });
+  }
+
+  async ccSessions(projectId: Id): Promise<CcSessionRow[]> {
+    return byNewest(
+      this.ccSess.filter((s) => s.projectId === projectId),
+      (s) => s.createdAt,
+    ).map((s) => ({ ...s }));
+  }
+
+  async putCcSession(r: CcSessionRow): Promise<void> {
+    this.ccSess = [...this.ccSess.filter((s) => !(s.projectId === r.projectId && s.sessionId === r.sessionId)), { ...r }];
+  }
 
   async createInvite(r: InviteRow): Promise<void> {
     this.invites.set(r.id, { ...r });

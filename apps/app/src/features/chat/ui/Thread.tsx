@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable } from 'react-native';
+import { Keyboard, Pressable } from 'react-native';
 import { Icon } from './icons';
 import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { Id } from '@meetless/core';
@@ -19,10 +19,16 @@ export function Thread({ scope, pending, onDash, style, extra, onCollapse, bare,
   const [note, setNote] = useState<string | null>(null);
   const items = threadItems({ t, live, me, today, fmtDay, scope, onDash });
   const ref = useRef<ScrollView | null>(null);
+  const toEnd = () => ref.current?.scrollToEnd({ animated: false });
   useEffect(() => {
-    const id = setTimeout(() => ref.current?.scrollToEnd({ animated: false }), 0);
+    const id = setTimeout(toEnd, 0);
     return () => clearTimeout(id);
   }, [items.length, scope, pending]);
+  // The keyboard shrinks (or restores) the sheet around the thread: keep the newest answer in view.
+  useEffect(() => {
+    const subs = [Keyboard.addListener('keyboardDidShow', () => setTimeout(toEnd, 0)), Keyboard.addListener('keyboardDidHide', () => setTimeout(toEnd, 0))];
+    return () => subs.forEach((x) => x.remove());
+  }, []);
   return (
     <View style={[bare ? styles.bare : styles.thread, style]} testID="thread">
       {!bare && (
@@ -35,7 +41,7 @@ export function Thread({ scope, pending, onDash, style, extra, onCollapse, bare,
         {onCollapse && <Button variant="ghost" size="sm" label={t('ch.close')} testID="thread-close" onPress={onCollapse} />}
       </View>
       )}
-      <ScrollView ref={ref} style={styles.body} contentContainerStyle={[styles.bodyIn, bare && styles.bodyBare]} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={ref} onContentSizeChange={toEnd} onLayout={toEnd} style={styles.body} contentContainerStyle={[styles.bodyIn, bare && styles.bodyBare]} keyboardShouldPersistTaps="handled">
         {items.map((m) => (
           <View key={m.id} style={styles.msg}>
             <View style={styles.user}>

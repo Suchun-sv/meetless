@@ -46,7 +46,7 @@ export function Sheet({ open, onClose, title, header, children, footer, onBack, 
   );
   return (
     <Modal visible={open} transparent animationType={phone ? 'slide' : 'fade'} onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.root, phone ? styles.rootPhone : styles.rootWide]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.root, phone ? [styles.rootPhone, { paddingTop: insets.top + space[2] }] : styles.rootWide]}>
         <Pressable accessibilityLabel={t('close')} style={StyleSheet.absoluteFill} onPress={onClose}>
           <View style={styles.scrim} />
         </Pressable>
@@ -99,7 +99,8 @@ const styles = StyleSheet.create({
   rootWide: { justifyContent: 'center', alignItems: 'center', padding: space[6] },
   scrim: { flex: 1, backgroundColor: colors.scrim },
   panel: { backgroundColor: colors.bg, ...shadow.lg },
-  panelPhone: { maxHeight: '92%', borderTopLeftRadius: radius.xl + 8, borderTopRightRadius: radius.xl + 8 },
+  // flexShrink: with the keyboard up the sheet gets shorter instead of sliding under the status bar.
+  panelPhone: { maxHeight: '100%', flexShrink: 1, borderTopLeftRadius: radius.xl + 8, borderTopRightRadius: radius.xl + 8 },
   panelWide: { maxWidth: '100%', maxHeight: '90%', borderRadius: radius.xl },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: radius.full, backgroundColor: colors.borderStrong, marginTop: space[2] },
   headPhone: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3], paddingHorizontal: space[5], paddingTop: space[3], paddingBottom: space[2] },

@@ -40,6 +40,7 @@ export const NAMESPACE_OWNERS: Readonly<Record<string, Owner>> = {
   hx: 'U2',
   lnv: 'U2',
   dock: 'U1',
+  cc: 'U1',
   // Expo A4 (search, settings)
   search: 'base',
   set: 'base',

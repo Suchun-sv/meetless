@@ -1,4 +1,4 @@
-import { noDots, type Id, type IsoDate, type State } from '@meetless/core';
+import { clip, noDots, type Id, type IsoDate, type State } from '@meetless/core';
 import type { MessageKey, Translator } from '@meetless/i18n';
 import { requesterLabel } from '@renderer/inputs/model';
 import { flowNodes, type FlowItem, type FlowNode } from '@renderer/needs/lineage';
@@ -77,7 +77,7 @@ function out(t: Translator['t'], live: State, projectId: Id, node: FlowNode, it:
     case 'action':
       return { key: `${i}`, code: null, verb: noDots(it.text), target: null };
     case 'pending':
-      return { key: `${i}`, code: null, verb: `${t(`in.x.${it.type}`)} ${t('lin.pending')}`, target: { kind: 'confirm', projectId } };
+      return { key: `${i}`, code: null, verb: t('lnv.out.pending', { type: t(`in.x.${it.type}`), text: clip(noDots(it.text), 16) }), target: { kind: 'confirm', projectId } };
   }
 }
 

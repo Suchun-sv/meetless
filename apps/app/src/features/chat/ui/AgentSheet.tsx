@@ -5,6 +5,11 @@ import type { Id } from '@meetless/core';
 import { Sheet, Text } from '@/components/ui';
 import { useApp } from '@/state';
 import { colors, fontFor, hasCjk, radius, space } from '@/theme';
+import { CcInput, CcOpening, CcThread } from '../cc/CcPanel';
+import { ModeRow } from '../cc/CcDock';
+import { getMode, setMode, type ChatMode } from '../cc/model';
+import { useCcAvailable } from '../cc/useCcAvailable';
+import { useCcSession } from '../cc/useCcSession';
 import { useComposer } from './composer';
 import { Icon } from './icons';
 import { Thread } from './Thread';
@@ -51,7 +56,18 @@ export function AskBar({ scope, onDash }: { scope: 'home' | Id; onDash: boolean 
 export function AgentSheet({ scope, onDash, open, onClose }: { scope: 'home' | Id; onDash: boolean; open: boolean; onClose: () => void }) {
   const c = useComposer(scope, onDash);
   const { t, live } = c;
+  // Projects talk to their Claude Code session by default; 我的 has no session and stays DeepSeek.
+  const [mode, setModeState] = useState<ChatMode>(() => (scope === 'home' ? 'ds' : getMode(scope)));
+  // Claude Code only when the server has it (no mock in production); otherwise DeepSeek, as before.
+  const ccOn = useCcAvailable(scope) === true;
+  const cc = scope !== 'home' && mode === 'cc' && ccOn;
+  const s = useCcSession(scope, open && cc);
+  const onMode = (m: ChatMode) => {
+    setModeState(m);
+    if (scope !== 'home') setMode(scope, m);
+  };
   const input = useRef<TextInput | null>(null);
+  // NOTES 05: the keyboard comes up as soon as the sheet opens; the shared Sheet shrinks above it.
   useEffect(() => {
     if (!open) return;
     const id = setTimeout(() => input.current?.focus(), 250);
@@ -63,13 +79,14 @@ export function AgentSheet({ scope, onDash, open, onClose }: { scope: 'home' | I
   const ph = scope === 'home' ? t('ch.phHome') : c.priv ? t('ch.phPrivate') : t('ch.ph');
 
   const header = (
-    <View>
+    <View style={styles.head}>
       <Text size="lg" weight="semibold" color="ai" tight>
         {scope === 'home' ? t('ch.homeAgent') : t('ch.agent')}
       </Text>
       <Text size="sm" color="textTertiary" numberOfLines={1}>
         {name}
       </Text>
+      {scope !== 'home' && ccOn && <ModeRow projectId={scope} mode={mode} onMode={onMode} s={cc ? s : null} />}
     </View>
   );
 
@@ -121,6 +138,16 @@ export function AgentSheet({ scope, onDash, open, onClose }: { scope: 'home' | I
   );
 
   const empty = c.msgs.length === 0 && c.pending === null;
+  if (cc) {
+    return (
+      <Sheet open={open} onClose={onClose} height={AGENT_SHEET_HEIGHT} header={header} fixedBody>
+        <View style={styles.ccBody}>
+          {s.needsOpening ? <CcOpening onOpen={s.open} /> : <CcThread s={s} style={styles.thread} />}
+          {!s.needsOpening && <CcInput projectId={scope} s={s} autoFocus={open} />}
+        </View>
+      </Sheet>
+    );
+  }
   return (
     <Sheet open={open} onClose={onClose} height={AGENT_SHEET_HEIGHT} header={header} footer={footer} fixedBody>
       {empty ? (
@@ -155,6 +182,8 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1 },
   thread: { flex: 1 },
+  head: { gap: 2 },
+  ccBody: { flex: 1, gap: space[2], paddingBottom: space[1] },
   emptyBody: { flexGrow: 1, justifyContent: 'flex-end', paddingTop: space[3] },
   sugs: { alignItems: 'flex-start', gap: space[2], paddingTop: space[2], paddingBottom: space[3] },
   sug: { borderWidth: 1, borderColor: colors.aiBg, borderRadius: radius.full, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: colors.textInverse },

@@ -1,5 +1,6 @@
 import type { AgentReply } from './agent';
 import type {
+  AgentSnapshot,
   AgentVia,
   Artifact,
   ArtifactKind,
@@ -68,7 +69,7 @@ export interface EventPayloads {
   /** Makes a planned round the current one (the previous current round, if not delivered, goes back to planned). */
   'round.started': { roundId: Id };
   /** Freezes the round's delivery. `account` defaults to the live status of the round's shared external needs. */
-  'round.delivered': { roundId: Id; date: IsoDate; items?: string[]; account?: DeliveryAccount[] };
+  'round.delivered': { roundId: Id; date: IsoDate; items?: string[]; account?: DeliveryAccount[]; agentSnapshot?: AgentSnapshot };
 
   'need.created': {
     needId: Id;

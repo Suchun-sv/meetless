@@ -5,7 +5,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CLIENT_HEADER, MCP_PATH, MCP_TOOLS, requestParts, type ApiErrorBody, type McpToolName } from '@meetless/api';
 import { stripFrontMatter } from '../accounts/guide';
+import { z } from 'zod';
+import type { Id } from '@meetless/core';
 import { authenticateRequest, errorResponse, type ApiDeps } from '../api/frame';
+import type { Principal } from '../auth';
+import type { CcManager } from '../cc/manager';
 import { toRoute, TOOL_DESCRIPTION, TOOL_INPUT } from './tools';
 
 /** This server package's version, reported as the MCP server's version. */
@@ -62,11 +66,26 @@ async function runTool(app: FastifyInstance, tool: McpToolName, args: Record<str
  * `remember` or `recall`) and the skill body (front matter stripped) as `instructions`
  * (contract §12.1's "optionally pass the skill body as the MCP server's instructions").
  */
-function mcpServerFor(app: FastifyInstance, fwd: Forward, instructions: string): McpServer {
+function mcpServerFor(app: FastifyInstance, fwd: Forward, instructions: string, cc: { projectId: Id; manager: CcManager } | null): McpServer {
   const server = new McpServer({ name: 'meetless', version: VERSION }, { instructions });
   for (const tool of MCP_TOOLS) {
     server.registerTool(tool, { description: TOOL_DESCRIPTION[tool], inputSchema: TOOL_INPUT[tool] }, (args: Record<string, unknown>) =>
       runTool(app, tool, args, fwd),
+    );
+  }
+  // A project's own Claude Code session (its project-scoped token): its --permission-prompt-tool.
+  // Held open until the project owner answers in the app (ten minutes at most).
+  if (cc) {
+    server.registerTool(
+      'approve',
+      {
+        description: 'Permission prompt for this project session: asks the project owner in Meetless and returns their decision.',
+        inputSchema: { tool_name: z.string(), input: z.record(z.string(), z.unknown()), tool_use_id: z.string().optional() },
+      },
+      async (args: { tool_name: string; input: Record<string, unknown> }) => {
+        const decision = await cc.manager.requestApproval(cc.projectId, args.tool_name, args.input ?? {});
+        return { content: [{ type: 'text', text: JSON.stringify(decision) }] };
+      },
     );
   }
   return server;
@@ -93,16 +112,18 @@ export function registerMcp(app: FastifyInstance, deps: ApiDeps): void {
   // Built once for the server's lifetime, not per request: the skill markdown never changes
   // while the process is running.
   const instructions = stripFrontMatter(deps.skillMarkdown).trim();
+  const principals = new WeakMap<FastifyRequest, Principal>();
   app.route({
     method: 'POST',
     url: MCP_PATH,
     bodyLimit: MCP_BODY_LIMIT,
     onRequest: async (req) => {
-      await authenticateRequest(deps.auth, req, deps.rateLimits.signIn);
+      principals.set(req, await authenticateRequest(deps.auth, req, deps.rateLimits.signIn));
     },
     handler: async (req, reply) => {
       const fwd: Forward = { authorization: req.headers.authorization ?? '', client: firstHeader(req.headers[CLIENT_HEADER]), ip: req.ip };
-      const server = mcpServerFor(app, fwd, instructions);
+      const scope = principals.get(req)?.projectId;
+      const server = mcpServerFor(app, fwd, instructions, scope && deps.cc ? { projectId: scope, manager: deps.cc } : null);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       reply.hijack();
       let closed = false;

@@ -9,6 +9,7 @@ import { routeToHref, useApp } from '@/state';
 import { useHeaderActionList, type HeaderAction } from './chrome';
 import { ProjectSheet } from './ProjectSheet';
 import { useCurrent } from './useCurrent';
+import { useCcAvailable } from '@/features/chat/cc/useCcAvailable';
 
 /** Page titles for the compact header (‹ back + large title). */
 const TITLE: Record<string, MessageKey> = {
@@ -102,12 +103,13 @@ function LargeTitle({ text, small }: { text: string; small?: boolean }) {
 
 /** The project header: ‹ 项目, actions and ⋯, the name, the current deadline line, the four segments. */
 function ProjectHeader({ projectId }: { projectId: Id }) {
-  const { live, t, today, fmtDay, submit } = useApp();
+  const { live, t, today, fmtDay, submit, me } = useApp();
   const router = useRouter();
   const cur = useCurrent();
   const actions = useHeaderActionList();
   const [menu, setMenu] = useState(false);
   const [settings, setSettings] = useState(false);
+  const ccOn = useCcAvailable(projectId) === true;
   const project = live.projects[projectId];
   if (!project) return null;
   const pc = progressCard(live, projectId, today);
@@ -117,6 +119,8 @@ function ProjectHeader({ projectId }: { projectId: Id }) {
     { label: t('nav.members'), onPress: () => router.push(routeToHref({ view: 'members', projectId })), testID: 'menu-members' },
     { label: t('nav.rounds'), onPress: () => router.push(routeToHref({ view: 'rounds', projectId })), testID: 'menu-rounds' },
     { label: t('pj.setup'), onPress: () => setSettings(true), testID: 'menu-settings' },
+    // Claude Code session (A3): continue elsewhere, owner only (the page explains to others).
+    ...(ccOn && project.createdBy === me ? [{ label: t('cc.handoff.title'), onPress: () => router.push(`/p/${encodeURIComponent(projectId)}/handoff?cc=1` as Href), testID: 'menu-cc-handoff' }] : []),
     project.archived
       ? { label: t('pj.restore'), onPress: () => void submit('project.unarchived', { projectId }), testID: 'menu-restore' }
       : {

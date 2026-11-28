@@ -18,6 +18,7 @@ import { tokenKind } from '../accounts/secrets';
 import { bearerToken, isAuthFailure, type Authenticator, type AuthFailure, type Principal } from '../auth';
 import { checkCsrf, parseCookies } from '../web/cookies';
 import type { ProjectAi } from '../agents/deepseek';
+import type { CcManager } from '../cc/manager';
 import type { OfficeViewer } from '../office/onlyoffice';
 import type { RateLimiter } from './ratelimit';
 import type { ServerConfig } from '../server';
@@ -51,6 +52,8 @@ export const API_STATUS: Record<string, number> = {
   TOO_LARGE: 413,
   EXTRACT_FAILED: 422,
   RATE_LIMITED: 429,
+  TURN_RUNNING: 409,
+  IN_USE_ELSEWHERE: 409,
   NOT_IMPLEMENTED: 501,
   NOT_AVAILABLE: 503,
 };
@@ -165,6 +168,8 @@ export interface ApiDeps {
   skillMarkdown: string;
   /** The project agent's model (`agent.ask`, `me.ai`); `buildApp` builds one from `cfg.ai`. Absent = rule-only. */
   ai?: ProjectAi;
+  /** Projects' Claude Code sessions; absent when the server runs none (MEETLESS_CC_HOME unset). */
+  cc?: CcManager;
 }
 
 type AuthOf<K extends ApiName> = (typeof API_ROUTES)[K]['auth'];
@@ -181,7 +186,7 @@ export interface RouteCtx<K extends ApiName> {
 export type Handler<K extends ApiName> = (ctx: RouteCtx<K>) => Promise<ApiResponse<K>>;
 
 /** Query keys that arrive as numbers when they are plain digits. */
-export const NUMERIC_QUERY: ReadonlySet<string> = new Set(['limit', 'round']);
+export const NUMERIC_QUERY: ReadonlySet<string> = new Set(['limit', 'round', 'after']);
 
 const MAX_CLIENT_LENGTH = 64;
 
@@ -288,6 +293,12 @@ export function defineRoute<K extends ApiName>(app: FastifyInstance, deps: ApiDe
     handler: async (http) => {
       const st = calls.get(http)!;
       st.req = requestOf(route, http);
+      // A project-scoped agent token (a project's Claude Code session) reaches that project only.
+      const scope = st.p?.projectId;
+      if (scope) {
+        if (typeof st.req.projectId === 'string' && st.req.projectId !== scope) throw new ApiError('NOT_A_MEMBER');
+        if (name === 'search') st.req.projectId = scope;
+      }
       const res = await handler({ p: st.p, req: st.req, http, deps } as RouteCtx<K>);
       await record(http, st, null);
       return res;

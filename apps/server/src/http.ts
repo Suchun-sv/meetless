@@ -12,6 +12,8 @@ import { RateLimiter } from './api/ratelimit';
 import { printUsage, ProjectAi } from './agents/deepseek';
 import { loadSkillMarkdown, skillPathFromEnv } from './accounts/guide';
 import { registerMcp } from './mcp/server';
+import { ccConfigFrom } from './cc/config';
+import { CcManager } from './cc/manager';
 import { bearerToken, isAuthFailure, type Principal } from './auth';
 import { OfficeViewer } from './office/onlyoffice';
 import { OfficeTickets } from './office/tickets';
@@ -117,6 +119,13 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const deps: ApiDeps = { service, accounts: opts.accounts, auth, cfg, rateLimits, skillMarkdown, ai };
   // One OfficeViewer per server, so its 30s availability cache actually caches across requests.
   deps.officeViewer = new OfficeViewer(deps, opts.officeTickets ?? new OfficeTickets(), opts.officeFetch);
+  const ccCfg = ccConfigFrom(cfg);
+  if (ccCfg) {
+    const cc = new CcManager(deps, ccCfg);
+    deps.cc = cc;
+    cc.start();
+    app.addHook('onClose', async () => cc.stop());
+  }
 
   /**
    * The /v1 sync and blob routes act as the user: personal and dev tokens only (an agent token

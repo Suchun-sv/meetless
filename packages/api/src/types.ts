@@ -174,6 +174,59 @@ export interface ApiSpec {
   };
   /** Coordinator ruling: `session.revoke`. S implements it; the client's `signOut()` calls it. */
   'session.revoke': { req: Record<string, never>; res: { revoked: true } };
+  // --- A project's Claude Code session (cc.*): members read, the owner (project creator) acts.
+  'cc.status': { req: { projectId: Id }; res: CcStatus };
+  'cc.history': { req: { projectId: Id; before?: string; limit?: number }; res: { items: CcItem[]; before: string | null } };
+  /** Starts a turn: the first one mints the project's agent token, writes its folder and creates the session. */
+  'cc.turn': { req: { projectId: Id; text: string }; res: { turnId: string; next: number } };
+  /** Long-poll (up to 20 s) for a turn's events after `after`; without `turnId`, the latest turn. */
+  'cc.events': { req: { projectId: Id; turnId?: string; after?: number }; res: { events: CcEvent[]; next: number; done: boolean } };
+  'cc.cancel': { req: { projectId: Id }; res: { cancelled: boolean } };
+  'cc.approve': { req: { projectId: Id; approvalId: string; allow: boolean }; res: { ok: true } };
+  'cc.handoff': { req: { projectId: Id }; res: { commands: CcHandoffCommand[] } };
+  /** The read-only code repo (a path on the server machine), kept server-side, not as an event. */
+  'cc.repo': { req: { projectId: Id; repoPath: string | null }; res: { repoPath: string | null } };
+}
+
+export type CcState = 'idle' | 'running_here' | 'in_use_elsewhere';
+
+export interface CcStatus {
+  /** False when this server runs no Claude Code sessions (MEETLESS_CC_HOME unset). */
+  available: boolean;
+  state: CcState;
+  detail?: string;
+  /** The caller is the project's owner (its creator): only they talk to the session. */
+  owner: boolean;
+  /** Null until the first turn. */
+  session: { id: string; name: string } | null;
+  repoPath: string | null;
+  /** The turn running here, to reattach `cc.events` after a reload. */
+  turn: { id: string; startedAt: IsoTime } | null;
+}
+
+export type CcItem =
+  | { kind: 'user'; id: string; text: string; at: IsoTime }
+  | { kind: 'assistant'; id: string; text: string; at: IsoTime }
+  | { kind: 'tool'; id: string; name: string; summary: string; ok: boolean | null; at: IsoTime }
+  | { kind: 'result'; id: string; costUsd?: number; at: IsoTime };
+
+export type CcEvent = { seq: number } & (
+  | { type: 'session'; sessionId: string }
+  | { type: 'user'; id: string; text: string }
+  /** Assistant text; the same `id` continues the same message. */
+  | { type: 'text'; id: string; delta: string }
+  | { type: 'tool'; id: string; name: string; summary: string }
+  | { type: 'tool_result'; id: string; ok: boolean }
+  | { type: 'permission'; approvalId: string; tool: string; input: string; expiresAt: IsoTime }
+  | { type: 'permission_done'; approvalId: string; behavior: 'allow' | 'deny' }
+  | { type: 'result'; costUsd?: number; durationMs?: number }
+  | { type: 'error'; code: string; message: string }
+);
+
+export interface CcHandoffCommand {
+  kind: 'terminal' | 'remote' | 'desktop';
+  command: string;
+  note: string;
 }
 
 export type ApiName = keyof ApiSpec;

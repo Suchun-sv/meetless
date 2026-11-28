@@ -110,6 +110,29 @@ export interface TokenRow {
   createdAt: IsoTime;
   lastUsedAt: IsoTime | null;
   revokedAt: IsoTime | null;
+  /** An agent token that reaches this one project only (a project's Claude Code session); null = all of the user's. */
+  projectId?: Id | null;
+}
+
+/** A project's folder for its Claude Code session (`<cc home>/<folder>`), bound by project id. */
+export interface CcProjectRow {
+  projectId: Id;
+  /** The folder's name under the cc home. */
+  folder: string;
+  /** A code repo on the server machine, shown read-only as `repo/`. */
+  repoPath: string | null;
+  /** The project-scoped agent token in its `.mcp.json`, minted on the owner's first turn. */
+  tokenId: Id | null;
+  updatedAt: IsoTime;
+}
+
+/** A Claude Code session Meetless started for a project (phase 1's own record). */
+export interface CcSessionRow {
+  projectId: Id;
+  sessionId: string;
+  name: string;
+  transcriptPath: string;
+  createdAt: IsoTime;
 }
 
 /** One MCP call, logged for the agent activity view. */
@@ -145,5 +168,10 @@ export interface AccountStore {
   recordCall(r: AgentCallRow): Promise<void>;
   /** Newest first, capped at `limit`. */
   listCalls(userId: Id, limit: number): Promise<AgentCallRow[]>;
+  ccProject(projectId: Id): Promise<CcProjectRow | null>;
+  putCcProject(r: CcProjectRow): Promise<void>;
+  /** Newest first. */
+  ccSessions(projectId: Id): Promise<CcSessionRow[]>;
+  putCcSession(r: CcSessionRow): Promise<void>;
   close(): Promise<void>;
 }
