@@ -25,6 +25,8 @@ export interface ItemPlan {
   /** The due date as changed in review (`undefined` = the item's own). */
   due?: IsoDate | null;
   decision: Decision;
+  /** B4's 「新建截止」 switch (off unless turned on). */
+  createRound?: boolean;
 }
 
 export interface NewProjectForm {
@@ -48,7 +50,9 @@ export function suggestion(m: InboxMaterial): RoutingCandidate | null {
 /** Each item's starting target: its own project, else the suggestion, else the new project. */
 export function initialPlan(m: InboxMaterial): ItemPlan[] {
   const sug = suggestion(m);
-  const first: Target = sug ? { projectId: sug.projectId } : NEW;
+  // No routing yet (an older or partial material): its own first project, else the new project.
+  const own = m.projectIds?.[0];
+  const first: Target = sug ? { projectId: sug.projectId } : !m.routing?.newProject && own ? { projectId: own } : NEW;
   return m.items.map((item) => ({ item, target: item.projectId ? { projectId: item.projectId } : item.projectId === null && m.routing?.newProject ? NEW : first, decision: null }));
 }
 
@@ -157,6 +161,8 @@ export function commitBody(plan: readonly ItemPlan[], form: NewProjectForm | nul
       ...(p.due !== undefined ? { due: p.due } : {}),
       ...(action === 'merge' && p.item.duplicateOf ? { mergeInto: p.item.duplicateOf } : {}),
       ...(p.item.conflict ? { conflict: d === 'keep' ? ('keep' as const) : ('apply' as const) } : {}),
+      // A new deadline only when asked for: the switch, or a date picked by hand (an explicit choice).
+      ...('projectId' in p.target && p.item.createsRound && (p.createRound || p.due !== undefined) ? { createRound: true } : {}),
     };
   });
   const toNew = items.some((i) => 'newProject' in i.target && i.action !== 'skip');
@@ -164,6 +170,11 @@ export function commitBody(plan: readonly ItemPlan[], form: NewProjectForm | nul
     items,
     ...(toNew && form ? { newProject: { name: form.name.trim(), firstRound: form.roundTitle.trim() && form.due ? { title: form.roundTitle.trim(), due: form.due } : null, template: form.template } } : {}),
   };
+}
+
+/** The dates that would need a new deadline in an existing project (one-tap accept leaves them under the current deadline). */
+export function newRoundDates(plan: readonly ItemPlan[]): IsoDate[] {
+  return [...new Set(plan.filter((p) => 'projectId' in p.target && p.item.createsRound && !p.createRound).map((p) => p.item.createsRound!.due))].sort();
 }
 
 /** How many items the commit actually takes (not skipped), and into how many places. */

@@ -25,6 +25,14 @@ export function localInbox(t: Translator['t'], live: State, me: Id, today: strin
   return { pending, recent: [], older: 0, badge: pending.length };
 }
 
+/** The dev mock names the user's own projects; their list arrives with the replayed state. */
+function useSeedMock() {
+  const { live, me } = useApp();
+  useEffect(() => {
+    seedMockProjects(Object.values(live.projects).filter((p) => p.memberIds.includes(me)).map((p) => p.id));
+  }, [live.projects, me]);
+}
+
 /**
  * The 「需求」 list: the server's inbox when it has one (or the dev mock), else the local cards.
  * Reloads on focus, and every few seconds while something is still being analysed.
@@ -40,10 +48,7 @@ export function useInbox() {
     },
     [],
   );
-  // The dev mock names the user's own projects; their list arrives with the replayed state.
-  useEffect(() => {
-    seedMockProjects(Object.values(live.projects).filter((p) => p.memberIds.includes(me)).map((p) => p.id));
-  }, [live.projects, me]);
+  useSeedMock();
   const refresh = useCallback(async () => {
     try {
       const l = await listInbox(api as unknown as ApiFn);
@@ -81,6 +86,7 @@ export function usePendingMaterialCount(): number {
 /** One material, followed while it is analysed: `inbox.get` long-polls past the last `rev`. */
 export function useMaterial(materialId: string) {
   const { api } = useApp();
+  useSeedMock();
   const [m, setM] = useState<InboxMaterial | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [epoch, setEpoch] = useState(0);

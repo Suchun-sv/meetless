@@ -20,9 +20,9 @@ export function todayCount(s: State, me: Id, today: string): number {
       const toMe = Object.values(s.handoffs).filter((x) => x.needId === n.id && x.toId === me && x.state !== 'declined' && x.state !== 'done');
       const mine = n.ownerId === me || (n.ownerId === null && solo) || toMe.length > 0;
       if (!mine) continue;
-      // A span round is a period, not a deadline (core skips it the same way).
+      // A span round is a period, not a deadline; a removed round is gone (core skips both the same way).
       const round = n.roundId ? s.rounds[n.roundId] : undefined;
-      const roundDue = round && !round.span ? round.due : null;
+      const roundDue = round && !round.span && !round.removed ? round.due : null;
       const dues = [roundDue, ...toMe.map((x) => x.due ?? null)].filter((d): d is string => !!d);
       if (dues.some((d) => d.slice(0, 10) <= today)) keys.add(`need:${n.id}`);
     }

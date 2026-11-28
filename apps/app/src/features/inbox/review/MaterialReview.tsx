@@ -24,6 +24,7 @@ import {
   reasonFor,
   sameTarget,
   takeCounts,
+  newRoundDates,
   targetKey,
   type Decision,
   type ItemPlan,
@@ -31,6 +32,7 @@ import {
   type Target,
 } from './model';
 import { fixedProject, reviewOf, type CommitBody, type CommitResult, type InboxItem, type IsoDate, type ReviewMaterial as InboxMaterial } from './types';
+import { sourceLabel } from '../model/source';
 
 export type { CommitBody, CommitResult };
 
@@ -134,6 +136,7 @@ function Quote({ item }: { item: InboxItem }) {
 }
 
 const TYPE_KEY = { need: 'rv.t.need', hyp: 'rv.t.hyp', rev: 'rv.t.rev' } as const;
+/** S's `source` codes for materials added in the inbox; anything else (an email sender, 项目 Agent) shows as given. */
 const DONE_KEY = { accept: 'rv.done.accept', merge: 'rv.done.merge', skip: 'rv.done.skip', keep: 'rv.done.keep' } as const;
 
 /** One item as a B4 card; once decided it folds to a line that reopens on a tap. */
@@ -142,6 +145,7 @@ function ItemCard({ p, set, busy }: { p: ItemPlan; set: (patch: Partial<ItemPlan
   const { fmtDay, withWeek, left } = useDates();
   const i = p.item;
   const dup = i.duplicateOf ? live.needs[i.duplicateOf] : undefined;
+  const revOf = i.type === 'rev' && !i.conflict && i.revNeedId ? live.needs[i.revNeedId] : undefined;
   const dupRound = dup?.roundId ? live.rounds[dup.roundId] : undefined;
   const c = i.conflict;
   if (p.decision) {
@@ -174,6 +178,19 @@ function ItemCard({ p, set, busy }: { p: ItemPlan; set: (patch: Partial<ItemPlan
           {dupRound ? `   ${t('rv.dueOn', { d: fmtDay(dupRound.due) })}` : ''}
         </Text>
       ) : null}
+      {revOf ? (
+        <View style={{ gap: 2 }}>
+          <Text size="sm" color="textSecondary">
+            {t('rv.revises')}
+            <Text size="sm" weight="semibold">{` ${revOf.code} ${revOf.title}`}</Text>
+          </Text>
+          {(revOf.kind === 'ext' ? revOf.accept : revOf.expect) ? (
+            <Text size="sm" color="textTertiary" style={{ textDecorationLine: 'line-through' }}>
+              {revOf.kind === 'ext' ? revOf.accept : revOf.expect}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       {c ? (
         <View style={styles.row}>
           <Text size="md" color="textTertiary" style={{ textDecorationLine: 'line-through' }}>
@@ -189,6 +206,23 @@ function ItemCard({ p, set, busy }: { p: ItemPlan; set: (patch: Partial<ItemPlan
             {left(c.new).text}
           </Text>
         </View>
+      ) : null}
+      {i.createsRound && 'projectId' in p.target ? (
+        <Pressable
+          testID="rv-new-round"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: !!p.createRound }}
+          disabled={busy}
+          onPress={() => set({ createRound: !p.createRound })}
+          style={styles.switchRow}
+        >
+          <View style={[styles.switch, p.createRound && styles.switchOn]}>
+            <View style={[styles.knob, p.createRound && styles.knobOn]} />
+          </View>
+          <Text size="sm" color={p.createRound ? 'text' : 'textSecondary'}>
+            {t('rv.newRound', { d: fmtDay(i.createsRound.due) })}
+          </Text>
+        </Pressable>
       ) : null}
       <Quote item={i} />
       <View style={styles.iact}>
@@ -217,7 +251,8 @@ function ItemCard({ p, set, busy }: { p: ItemPlan; set: (patch: Partial<ItemPlan
 /** The material's own card (B6, B7): icon, title, source and time, summary. */
 function MaterialCard({ m }: { m: InboxMaterial }) {
   const { t, fmtClock, fmtDay, today } = useApp();
-  const when = m.at.slice(0, 10) === today ? `${t('tl.today')} ${fmtClock(m.at)}` : fmtDay(m.at.slice(0, 10));
+  const at = m.addedAt ?? m.at ?? '';
+  const when = !at ? '' : at.slice(0, 10) === today ? `${t('tl.today')} ${fmtClock(at)}` : fmtDay(at.slice(0, 10));
   const icon = m.kind === 'mail' ? 'mail' : m.kind === 'chat' ? 'chat' : m.kind === 'proposal' || m.kind === 'agent' ? 'sparkle' : 'file';
   return (
     <View style={styles.mcard}>
@@ -228,7 +263,7 @@ function MaterialCard({ m }: { m: InboxMaterial }) {
         <Text size="md" weight="semibold" numberOfLines={1}>
           {m.title}
         </Text>
-        <Text size="sm" color="textTertiary" tight>{`${m.source}   ${when}`}</Text>
+        <Text size="sm" color="textTertiary" tight>{`${sourceLabel(t, m.source)}   ${when}`}</Text>
         {m.summary ? (
           <Text size="sm" style={{ marginTop: 6, lineHeight: 21 }}>
             {m.summary}
@@ -640,6 +675,9 @@ export function MaterialReview({
           {f.hyps ? <Fact text={t('rv.facts.hyps', { n: f.hyps })} /> : null}
           {f.revs ? <Fact text={t('rv.facts.revs', { n: f.revs })} /> : null}
           {f.due ? <Fact text={t('rv.facts.due', { d: fmtDay(f.due) })} /> : null}
+          {newRoundDates(plan).map((d) => (
+            <Fact key={d} text={t('rv.facts.noRound', { d: fmtDay(d) })} />
+          ))}
         </View>
         <Button testID="rv-accept-all-one" variant="primary" label={t('rv.acceptAll', { name: P.name(pid), n: plan.length })} busy={busy} onPress={() => void send(true)} style={styles.wide} />
         <Button testID="rv-one-by-one" variant="ghost" label={t('rv.oneByOne')} disabled={busy} onPress={() => setStep('items')} style={styles.wide} />
@@ -828,6 +866,11 @@ const styles = StyleSheet.create({
   ckRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   ck: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   ckOn: { backgroundColor: colors.success, borderColor: colors.success },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingVertical: 2 },
+  switch: { width: 34, height: 20, borderRadius: 10, backgroundColor: colors.borderStrong, padding: 2, justifyContent: 'center' },
+  switchOn: { backgroundColor: colors.success },
+  knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.textInverse },
+  knobOn: { alignSelf: 'flex-end' },
 });
 
 export type { ReactNode, Decision };

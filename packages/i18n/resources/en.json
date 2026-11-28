@@ -1126,5 +1126,14 @@
   "inb.noPhotos": "Allow photo access in Settings to pick an image",
   "inb.agent": "Project agent",
   "inb.question": "A question for you",
-  "inb.analysed": "《{title}》is analysed"
+  "inb.analysed": "《{title}》is analysed",
+  "rv.revises": "Revises:",
+  "inb.src.paste": "Pasted",
+  "inb.src.file": "File",
+  "inb.src.camera": "Photo",
+  "inb.src.album": "Photos",
+  "inb.src.drop": "Dropped in",
+  "inb.src.share": "Shared",
+  "rv.newRound": "New deadline {d}",
+  "rv.facts.noRound": "No deadline on {d} yet; goes under the current one"
 }

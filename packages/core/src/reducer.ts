@@ -206,13 +206,14 @@ function roundIn(s: State, projectId: Id, roundId: Id | null | undefined): Id | 
   if (roundId === null || roundId === undefined) return null;
   const r = get(s.rounds, roundId, 'round');
   if (r.projectId !== projectId) throw new DomainError('INVALID_EVENT', 'round belongs to another project');
+  if (r.removed) throw new DomainError('INVALID_EVENT', 'round was removed');
   return r.id;
 }
 
 /** Current round of a project (null if none). */
 export function currentRound(s: State, projectId: Id): Round | null {
   let best: Round | null = null;
-  for (const r of Object.values(s.rounds)) if (r.projectId === projectId && r.status === 'current' && (!best || r.n < best.n)) best = r;
+  for (const r of Object.values(s.rounds)) if (r.projectId === projectId && r.status === 'current' && !r.removed && (!best || r.n < best.n)) best = r;
   return best;
 }
 
@@ -519,6 +520,21 @@ const handlers: Handlers = {
       if (spanOf(p.span)) r.span = true;
       else delete r.span;
     }
+    if (p.removed !== undefined) {
+      if (p.removed !== true) throw new DomainError('INVALID_EVENT', 'round removed can only be true');
+      if (Object.values(s.needs).some((n) => n.roundId === r.id && n.status !== 'dropped' && n.status !== 'parked')) {
+        throw new DomainError('INVALID_STATE_TRANSITION', 'the round still holds needs that are not dropped or parked');
+      }
+      const wasCurrent = r.status === 'current';
+      r.removed = true;
+      if (wasCurrent) {
+        r.status = 'planned';
+        const next = Object.values(s.rounds)
+          .filter((x) => x.projectId === r.projectId && x.status === 'planned' && !x.removed && x.id !== r.id)
+          .sort((a, b) => a.n - b.n)[0];
+        if (next) next.status = 'current';
+      }
+    }
     if (p.items !== undefined) {
       if (r.status === 'delivered') throw new DomainError('INVALID_STATE_TRANSITION', 'delivered rounds are frozen');
       r.items = p.items.map((x) => text(x, 'item'));
@@ -759,6 +775,10 @@ const handlers: Handlers = {
     const input = visible(s.inputs, e.payload.inputId, 'input', e.actorId);
     requireMember(s, input.projectId, e.actorId);
     input.scene = sceneOf(e.payload.scene);
+    if (e.payload.removed !== undefined) {
+      if (e.payload.removed !== true) throw new DomainError('INVALID_EVENT', 'input removed can only be true');
+      input.removed = true;
+    }
   },
   'input.shared': (s, e) => {
     const p = e.payload;

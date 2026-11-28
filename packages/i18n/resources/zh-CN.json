@@ -1126,5 +1126,14 @@
   "inb.noPhotos": "请在设置里允许访问照片",
   "inb.agent": "项目 Agent",
   "inb.question": "需要你回答的问题",
-  "inb.analysed": "《{title}》分析完了"
+  "inb.analysed": "《{title}》分析完了",
+  "rv.revises": "修订：",
+  "inb.src.paste": "粘贴",
+  "inb.src.file": "文件",
+  "inb.src.camera": "拍照",
+  "inb.src.album": "相册",
+  "inb.src.drop": "拖进来",
+  "inb.src.share": "分享",
+  "rv.newRound": "新建截止 {d}",
+  "rv.facts.noRound": "{d} 还没有截止，先放进当前截止"
 }

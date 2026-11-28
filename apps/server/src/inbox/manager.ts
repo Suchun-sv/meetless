@@ -25,6 +25,8 @@ type UndoStep =
   | { t: 'work'; workId: Id }
   | { t: 'moved'; needId: Id; roundId: Id | null }
   | { t: 'revised'; needId: Id; prev: string }
+  | { t: 'round'; roundId: Id }
+  | { t: 'input'; inputId: Id; scene: Scene }
   | { t: 'project'; projectId: Id };
 
 interface Batch {
@@ -65,6 +67,42 @@ const clip = (s: string, n: number) => {
   return [...t].length > n ? `${[...t].slice(0, n - 1).join('')}…` : t;
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Words that name a date or deadline: an item keeps the due date the model gave it only when its own sentence has one. */
+const DATEY =
+  /(\d{1,2}\s*月\s*\d{1,2}\s*[日号]?|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\b\d{1,2}\/\d{1,2}\b|[下本这上]周|下个?星期|[周礼]拜?[一二三四五六日天]|星期[一二三四五六日天]|明天|后天|今天|今晚|月底|月初|年底|截止|之前|以前|\bby\b|\bdue\b|deadline|\b(mon|tues|wednes|thurs|fri|satur|sun)day\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d)/i;
+const ownDue = (due: IsoDate | null | undefined, sentence: string | null): IsoDate | null => (due && sentence && DATEY.test(sentence) ? due : null);
+
+/** Two-character runs (and ASCII words): enough to tell which sentence an item was taken from. */
+const grams = (s: string): Set<string> => {
+  const out = new Set<string>();
+  const t = s.toLowerCase().replace(/\s+/g, '');
+  for (const w of t.match(/[a-z0-9.]{2,}/g) ?? []) out.add(w);
+  for (let i = 0; i + 1 < t.length; i++) out.add(t.slice(i, i + 2));
+  return out;
+};
+
+/** The sentence of `para` an item came from (most shared character pairs): its quote, and the only place its due date may come from. */
+function sentenceOf(itemText: string, para: string | null): string | null {
+  if (!para) return null;
+  const parts = para
+    .split(/(?<=[。！？!?；;])|\n/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return para;
+  const want = grams(itemText);
+  let best: string | null = null;
+  let score = 0;
+  for (const part of parts) {
+    const g = grams(part);
+    const n = [...want].filter((x) => g.has(x)).length;
+    if (n > score) {
+      score = n;
+      best = part;
+    }
+  }
+  return best ?? para;
+}
 
 /**
  * The 「需求」 inbox: materials the user drops in with no project yet, kept as server rows (never
@@ -427,8 +465,10 @@ export class InboxManager {
     const items: InboxItem[] = extracts
       .filter((x) => x.type === 'new' || x.type === 'hyp')
       .map((x, i) => {
-        const quote = paras.find((p) => p.id === x.paraId)?.text ?? null;
-        return { id: `x${i + 1}`, type: x.type === 'hyp' ? 'hyp' : 'need', text: x.text, due: x.due ?? null, quote, page: pageOf(quote), projectId: null };
+        const para = paras.find((p) => p.id === x.paraId)?.text ?? null;
+        // The model spreads the material's date over every item; only an item whose own sentence names one keeps it.
+        const quote = sentenceOf(x.text, para);
+        return { id: `x${i + 1}`, type: x.type === 'hyp' ? 'hyp' : 'need', text: x.text, due: ownDue(x.due, quote), quote, page: pageOf(quote), projectId: null };
       });
     const first = items.filter((i) => i.due).sort((a, b) => a.due!.localeCompare(b.due!))[0];
     if (first) {
@@ -456,7 +496,14 @@ export class InboxManager {
     m.stage = 'checking';
     await this.save(userId, doc);
     await sleep(STEP_MS);
-    m.items = routed.items;
+    // A due date with no deadline on that day in the item's project would create one: said in advance (createsRound).
+    m.items = routed.items.map((it) => {
+      if (!it.due || it.conflict) return it;
+      const has = it.projectId
+        ? projectRounds(view, it.projectId).some((r) => r.due === it.due && r.status !== 'delivered' && !r.span)
+        : m.routing?.newProject?.firstRound?.due === it.due;
+      return has ? it : { ...it, createsRound: { due: it.due, title: clip(it.text, 40) } };
+    });
     m.stage = 'done';
     m.status = 'ready';
     m.progress = null;
@@ -488,17 +535,22 @@ export class InboxManager {
     await this.deps.service.submit(userId, { ...cmd, id: `ev-${randomUUID()}` } as Command);
   }
 
-  /** The DDL a need due `due` goes under in `projectId`: one with that due date, else a new one (shared within the batch). */
-  private async roundFor(userId: Id, projectId: Id, due: IsoDate, title: string, made: Map<string, Id>): Promise<Id> {
+  /**
+   * The DDL a need due `due` goes under in `projectId`: one with that due date; else, only when `create`
+   * (the user confirmed 「新建截止」), a new one, shared within the batch and taken back on undo; else none.
+   */
+  private async roundFor(userId: Id, projectId: Id, due: IsoDate, title: string, made: Map<string, Id>, create: boolean, plan: UndoStep[]): Promise<Id | null> {
     const s = this.deps.service.view(userId);
     const hit = projectRounds(s, projectId).find((r) => r.due === due && r.status !== 'delivered' && !r.span);
     if (hit) return hit.id;
     const key = `${projectId}|${due}`;
     if (made.has(key)) return made.get(key)!;
+    if (!create) return null;
     const roundId = `rnd-${randomUUID()}`;
     const today = this.today();
     await this.submit(userId, { type: 'round.created', payload: { roundId, projectId, title: clip(title, 40), kind: 'hard', start: today < due ? today : due, due } } as Command);
     made.set(key, roundId);
+    plan.push({ t: 'round', roundId });
     return roundId;
   }
 
@@ -555,7 +607,7 @@ export class InboxManager {
         await this.submit(userId, { type: 'project.created', payload: { projectId: newProjectId, name: clip(req.newProject!.name, 40) } } as Command);
         plan.push({ t: 'project', projectId: newProjectId });
         const fr = req.newProject!.firstRound;
-        if (fr?.due) await this.roundFor(userId, newProjectId, fr.due, fr.title || req.newProject!.name, made);
+        if (fr?.due) await this.roundFor(userId, newProjectId, fr.due, fr.title || req.newProject!.name, made, true, plan);
       }
       const target = (a: InboxCommitReq['items'][number]) => ('newProject' in a.target ? newProjectId! : a.target.projectId);
 
@@ -568,7 +620,7 @@ export class InboxManager {
           merged += await this.recordMerge(userId, p.projectId, a.mergeInto!, m.title, p.title, plan);
         } else {
           const needId = `n-${randomUUID()}`;
-          const roundId = a.due ? await this.roundFor(userId, p.projectId, a.due, p.title, made) : null;
+          const roundId = a.due ? await this.roundFor(userId, p.projectId, a.due, p.title, made, a.createRound === true, plan) : null;
           await this.submit(userId, { type: 'proposal.accepted', payload: { proposalId: p.id, needId, roundId } } as Command);
           plan.push({ t: 'need', needId, kind: p.kind === 'hyp' ? 'hyp' : 'ext' });
           created++;
@@ -589,7 +641,7 @@ export class InboxManager {
           } else if (x.type === 'new' || x.type === 'hyp') {
             const needId = `n-${randomUUID()}`;
             const due = a.due !== undefined ? a.due : x.due;
-            const roundId = due ? await this.roundFor(userId, input.projectId, due, x.text, made) : undefined;
+            const roundId = due ? await this.roundFor(userId, input.projectId, due, x.text, made, a.createRound === true, plan) : null;
             await this.submit(userId, { type: 'extract.accepted', payload: { inputId: input.id, extractId: x.id, needId, ...(roundId ? { roundId } : {}) } } as Command);
             plan.push({ t: 'need', needId, kind: x.type === 'hyp' ? 'hyp' : 'ext' });
             created++;
@@ -644,6 +696,7 @@ export class InboxManager {
               private: false,
             },
           } as Command);
+          plan.push({ t: 'input', inputId, scene });
           for (const a of acts) {
             const it = byId.get(a.itemId)!;
             const x = extracts.find((e) => e.id === it.id)!;
@@ -654,7 +707,7 @@ export class InboxManager {
               if (a.conflict === 'apply') {
                 const need = this.deps.service.view(userId).needs[it.conflict.needId];
                 if (need) {
-                  const roundId = await this.roundFor(userId, need.projectId, it.conflict.new, need.title, made);
+                  const roundId = await this.roundFor(userId, need.projectId, it.conflict.new, need.title, made, true, plan);
                   await this.submit(userId, { type: 'need.updated', payload: { needId: need.id, roundId } } as Command);
                   plan.push({ t: 'moved', needId: need.id, roundId: need.roundId });
                   changedDue++;
@@ -663,7 +716,7 @@ export class InboxManager {
               } else await this.submit(userId, { type: 'extract.ignored', payload: { inputId, extractId: x.id } } as Command);
             } else if (x.type === 'new' || x.type === 'hyp') {
               const needId = `n-${randomUUID()}`;
-              const roundId = x.due ? await this.roundFor(userId, pid, x.due, it.text, made) : undefined;
+              const roundId = x.due ? await this.roundFor(userId, pid, x.due, it.text, made, a.createRound === true, plan) : null;
               await this.submit(userId, { type: 'extract.accepted', payload: { inputId, extractId: x.id, needId, ...(roundId ? { roundId } : {}) } } as Command);
               plan.push({ t: 'need', needId, kind: x.type === 'hyp' ? 'hyp' : 'ext' });
               created++;
@@ -705,10 +758,15 @@ export class InboxManager {
     return 1;
   }
 
-  /** Takes a batch back with compensating events, newest first. */
+  /** Takes a batch back with compensating events, newest first; the deadlines and inputs it made go last. */
   private async revert(userId: Id, plan: UndoStep[]): Promise<void> {
     const projects: Id[] = [];
+    const later: UndoStep[] = [];
     for (const step of [...plan].reverse()) {
+      if (step.t === 'round' || step.t === 'input') {
+        later.push(step);
+        continue;
+      }
       if (step.t === 'need') {
         await this.submit(userId, { type: 'need.status_set', payload: { needId: step.needId, status: step.kind === 'hyp' ? 'parked' : 'dropped' } } as Command);
       } else if (step.t === 'work') {
@@ -718,7 +776,16 @@ export class InboxManager {
       } else if (step.t === 'revised') {
         // A revision is taken back by another one that restores the text.
         await this.submit(userId, { type: 'need.revised', payload: { needId: step.needId, revisionId: `undo-${randomUUID()}`, text: step.prev, why: '撤销收进来的修订', date: this.today() } } as Command);
-      } else projects.push(step.projectId);
+      } else if (step.t === 'project') projects.push(step.projectId);
+    }
+    for (const step of later) {
+      try {
+        if (step.t === 'round') await this.submit(userId, { type: 'round.updated', payload: { roundId: step.roundId, removed: true } } as Command);
+        else if (step.t === 'input') await this.submit(userId, { type: 'input.scene_set', payload: { inputId: step.inputId, scene: step.scene, removed: true } } as Command);
+      } catch (e) {
+        // Something else went under that deadline since: it stays.
+        this.deps.cfg.print(`inbox undo: ${step.t} kept (${(e as Error).message})`);
+      }
     }
     // A project the batch created is archived when nothing else went into it since.
     const s = this.deps.service.view(userId);

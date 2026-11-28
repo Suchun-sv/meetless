@@ -193,7 +193,7 @@ export function syncMaterials(folder: string, s: State, projectId: Id, blobs: Bl
     }
   };
   for (const i of Object.values(s.inputs)) {
-    if (i.projectId !== projectId) continue;
+    if (i.projectId !== projectId || i.removed) continue;
     const base = `${i.date}-${safe(i.title.replace(/\.(md|txt)$/i, ''))}-${short(i.id)}`;
     put(`inputs/${base}.md`, inputText(i));
     if (i.blobHash && !['md', 'txt', 'paste'].includes(i.kind)) copy(`inputs/originals/${base}.${/^[a-z0-9]{1,5}$/.test(i.kind) ? i.kind : 'bin'}`, i.blobHash);

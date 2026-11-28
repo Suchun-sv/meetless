@@ -88,6 +88,7 @@ export function search(view: State, q: { text: string; projectId?: Id | null; li
     add({ kind: 'work', id: w.id, projectId: w.projectId, needId: w.needId, field: 'work', text: w.text, why: w.why, date: w.date }, score(`${w.text} ${w.why ?? ''}`, 'work') + linked);
   }
   for (const i of Object.values(view.inputs)) {
+    if (i.removed) continue;
     if (!inScope(i.projectId)) continue;
     add({ kind: 'input', id: i.id, projectId: i.projectId, needId: null, field: 'title', text: i.title, why: null, date: i.date }, score(i.title, 'title'));
     for (const p of i.body) {

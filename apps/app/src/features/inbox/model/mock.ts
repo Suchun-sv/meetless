@@ -26,16 +26,17 @@ function seedStore() {
   if (seeded) return;
   seeded = true;
   const [a, b, c] = ['@P0', '@P1', '@P2'];
+  // B6: one material split across two projects, each item with its own project.
   const items: InboxItem[] = [
-    { id: 'i1', type: 'need', text: 'TODS 扩展版补一节相关工作' },
-    { id: 'i2', type: 'need', text: 'Tutorial 讲义 12月10日 前交初稿' },
-    { id: 'i3', type: 'hyp', text: '扩展版可以只改第 5 节' },
-    { id: 'i4', type: 'rev', text: 'N6 改成 12 页以内' },
-    { id: 'i5', type: 'need', text: 'Tutorial 准备 3 个例子' },
+    { id: 'i1', type: 'need', text: 'TODS 扩展版补一节相关工作', projectId: a },
+    { id: 'i2', type: 'need', text: 'Tutorial 讲义 12月10日 前交初稿', projectId: b },
+    { id: 'i3', type: 'hyp', text: '扩展版可以只改第 5 节', projectId: a },
+    { id: 'i4', type: 'rev', text: 'N6 改成 12 页以内', projectId: a, duplicateOf: `${a}:N6` },
+    { id: 'i5', type: 'need', text: 'Tutorial 准备 3 个例子', projectId: b },
   ];
   for (const m of [
-    material({ id: 'm-mail', kind: 'mail', title: '陈老师：RE: TODS 扩展版和 Tutorial', source: '邮件', addedAt: ago(90), status: 'ready', counts: { items: 5, projects: 2, duplicates: 1, conflicts: 0 }, projectIds: [a, b], items, summary: '陈老师希望 TODS 扩展版补相关工作，Tutorial 讲义 12月10日 前交初稿。' }),
-    material({ id: 'proposal:mock', kind: 'proposal', title: 'Agent 提议：VLDB 投稿 N6 改成 12 页以内', source: '项目 Agent', addedAt: ago(60 * 14), status: 'ready', counts: { items: 1, projects: 1, duplicates: 0, conflicts: 0 }, projectIds: [a], items: [items[3]!] }),
+    material({ id: 'm-mail', kind: 'mail', title: '陈老师：RE: TODS 扩展版和 Tutorial', source: '邮件', addedAt: ago(90), status: 'ready', counts: { items: 5, projects: 2, duplicates: 1, conflicts: 0 }, projectIds: [a, b], items, summary: '陈老师希望 TODS 扩展版补相关工作，Tutorial 讲义 12月10日 前交初稿。', routing: { candidates: [{ projectId: a, reason: 'TODS 扩展版是这篇论文的期刊版' }, { projectId: b, reason: 'Tutorial 讲义和这个项目的交付有关' }] } }),
+    material({ id: 'proposal:mock', kind: 'proposal', title: 'Agent 提议：VLDB 投稿 N6 改成 12 页以内', source: '项目 Agent', addedAt: ago(60 * 14), status: 'ready', counts: { items: 1, projects: 1, duplicates: 0, conflicts: 0 }, projectIds: [a], items: [{ id: 'pr1', type: 'rev', text: 'N6 改成 12 页以内', projectId: a }], routing: { candidates: [{ projectId: a, reason: '项目 Agent 在这个项目里提的' }] } }),
     material({ id: 'm-chat', kind: 'chat', title: '微信：和李同学的聊天', source: '12 条消息', addedAt: ago(2), status: 'analyzing', stage: 'extracting', progress: null }),
     material({ id: 'm-pdf', kind: 'pdf', title: '作业4_批改要求.pdf', source: 'PDF 6 页', addedAt: ago(60 * 20), status: 'committed', counts: { items: 3, projects: 1, duplicates: 0, conflicts: 0 }, projectIds: [c], committed: { projectIds: [c], count: 3 } }),
     material({ id: 'm-empty', kind: 'image', title: '截图 11月27日', source: '图片', addedAt: ago(60 * 30), status: 'empty' }),

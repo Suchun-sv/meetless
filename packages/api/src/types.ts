@@ -229,6 +229,8 @@ export interface InboxItem {
   conflict?: { needId: Id; field: 'due'; old: IsoDate | null; new: IsoDate };
   /** The existing need a revision changes. */
   revNeedId?: Id;
+  /** Its due date has no deadline in the suggested project: accepting with `createRound` makes this one (「新建截止」). */
+  createsRound?: { due: IsoDate; title: string };
 }
 
 export interface InboxRouting {
@@ -294,6 +296,8 @@ export interface InboxCommitReq {
     mergeInto?: Id;
     /** A due conflict: keep the existing need's deadline, or apply the new one. */
     conflict?: 'keep' | 'apply';
+    /** The user confirmed a new deadline for `due` (shown from `createsRound`); without it a need never makes one. */
+    createRound?: boolean;
   }[];
   newProject?: { name: string; firstRound: { title: string; due: IsoDate | null } | null; template: 'activity' | 'paper' | 'course' | null };
 }

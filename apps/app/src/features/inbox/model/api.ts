@@ -77,9 +77,10 @@ export class InboxError extends Error {
   }
 }
 
-const EXPLICIT_MOCK = Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]inboxmock=/.test(location.search);
-/** Never in production: without the routes the inbox falls back to the per-project items in core. */
-const MOCK_ALLOWED = EXPLICIT_MOCK || __DEV__ || process.env.EXPO_PUBLIC_INBOX_MOCK === '1';
+/** Never in production builds: only a dev build or EXPO_PUBLIC_INBOX_MOCK=1 may use the mock; without the routes the inbox falls back to the per-project items in core. */
+const MOCK_ALLOWED = __DEV__ || process.env.EXPO_PUBLIC_INBOX_MOCK === '1';
+/** `?inboxmock=1` forces the mock on web, but only where the mock is allowed at all. */
+const EXPLICIT_MOCK = MOCK_ALLOWED && Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]inboxmock=/.test(location.search);
 let mock = EXPLICIT_MOCK;
 let available: boolean | null = mock ? true : null;
 
@@ -113,7 +114,8 @@ async function call<T>(api: ApiFn, name: string, input: Record<string, unknown>)
     return unavailable<T>(name, input);
   }
   if (!r.ok) {
-    if (/NOT_AVAILABLE|UNKNOWN|ROUTE|HTTP_404/.test(r.code)) return unavailable<T>(name, input);
+    // A server without the inbox answers the list with NOT_FOUND (404); for one material NOT_FOUND is real.
+    if (/NOT_AVAILABLE|UNKNOWN|ROUTE|HTTP_404/.test(r.code) || (name === 'inbox.list' && r.code === 'NOT_FOUND')) return unavailable<T>(name, input);
     throw new InboxError(r.code);
   }
   available = true;

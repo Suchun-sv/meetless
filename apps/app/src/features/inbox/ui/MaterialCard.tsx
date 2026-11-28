@@ -6,6 +6,7 @@ import { useApp } from '@/state';
 import { colors, radius, space, tones } from '@/theme';
 import { Icon, type IconName } from '../../chat/ui/icons';
 import type { CardKind, InboxCard } from '../model/api';
+import { sourceLabel } from '../model/source';
 
 const ICON: Record<CardKind, IconName> = { text: 'pen', pdf: 'file', docx: 'file', image: 'image', mail: 'mail', chat: 'chat', proposal: 'sparkles' };
 
@@ -113,7 +114,7 @@ export function MaterialCard({ c, onPress, onRetry, highlight }: { c: InboxCard;
           {noDots(c.title)}
         </Text>
         <Text size="sm" color="textTertiary" numberOfLines={1}>
-          {`${c.source}　${when(t, c.addedAt, fmtDay, fmtClock)}`}
+          {`${sourceLabel(t, c.source)}　${when(t, c.addedAt, fmtDay, fmtClock)}`}
         </Text>
         <View style={styles.status}>{status}</View>
         {chips.length > 0 && (

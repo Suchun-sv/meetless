@@ -20,7 +20,7 @@ import {
 const bySeq = <T extends { seq?: number; createdSeq?: number }>(a: T, b: T) => (a.seq ?? a.createdSeq ?? 0) - (b.seq ?? b.createdSeq ?? 0);
 
 export function projectRounds(s: State, projectId: Id): Round[] {
-  return Object.values(s.rounds).filter((r) => r.projectId === projectId).sort((a, b) => a.n - b.n);
+  return Object.values(s.rounds).filter((r) => r.projectId === projectId && !r.removed).sort((a, b) => a.n - b.n);
 }
 
 /** The first planned round after the current one (null if there is none). */
@@ -52,7 +52,7 @@ export function projectWork(s: State, projectId: Id): WorkItem[] {
 }
 
 export function projectInputs(s: State, projectId: Id): Input[] {
-  return Object.values(s.inputs).filter((i) => i.projectId === projectId).sort((a, b) => b.seq - a.seq);
+  return Object.values(s.inputs).filter((i) => i.projectId === projectId && !i.removed).sort((a, b) => b.seq - a.seq);
 }
 
 export function needByCode(s: State, projectId: Id, code: string): Need | null {

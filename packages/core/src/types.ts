@@ -109,6 +109,8 @@ export interface Round {
   status: RoundStatus;
   /** A period or calendar item (a trip from start to due), not a deadline: never urgent or overdue. Absent = a deadline. */
   span?: boolean;
+  /** Taken back (an inbox commit undone): gone from every list and view. */
+  removed?: boolean;
   /** Planned delivery items while not delivered (draft); frozen on delivery. */
   items: string[];
   delivery: Delivery | null;
@@ -278,6 +280,8 @@ export interface Input {
   importedBy: Id;
   privateTo: Id | null;
   seq: Seq;
+  /** Taken back (an inbox commit undone): gone from every list and view. */
+  removed?: boolean;
 }
 
 export type ConflictStatus = 'open' | 'delegated' | 'resolved';

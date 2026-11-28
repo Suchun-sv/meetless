@@ -66,7 +66,8 @@ export interface EventPayloads {
 
   'round.created': { roundId: Id; projectId: Id; title: string; kind: RoundKind; start: IsoDate; due: IsoDate; items?: string[]; span?: boolean };
   /** `span: true` marks the round a period, `false` or `null` makes it a deadline again. */
-  'round.updated': { roundId: Id; title?: string; kind?: RoundKind; start?: IsoDate; due?: IsoDate; items?: string[]; span?: boolean | null };
+  /** `removed: true` takes the round away (only when it holds no open need). */
+  'round.updated': { roundId: Id; title?: string; kind?: RoundKind; start?: IsoDate; due?: IsoDate; items?: string[]; span?: boolean | null; removed?: boolean };
   /** Makes a planned round the current one (the previous current round, if not delivered, goes back to planned). */
   'round.started': { roundId: Id };
   /** Freezes the round's delivery. `account` defaults to the live status of the round's shared external needs. */
@@ -139,7 +140,8 @@ export interface EventPayloads {
   };
   'input.shared': { inputId: Id; snapshot?: { input: Input } };
   /** The input's scene, changed by hand. */
-  'input.scene_set': { inputId: Id; scene: Scene };
+  /** With `removed: true`, also takes the input away (it still carries its scene, for clients that only know the scene). */
+  'input.scene_set': { inputId: Id; scene: Scene; removed?: boolean };
   /** Accepting a new/hyp extract creates the need `needId`; a revision revises its target. */
   'extract.accepted': { inputId: Id; extractId: Id; needId?: Id; roundId?: Id | null };
   'extract.ignored': { inputId: Id; extractId: Id };

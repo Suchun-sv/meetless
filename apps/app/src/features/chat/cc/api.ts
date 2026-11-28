@@ -56,13 +56,15 @@ export class CcError extends Error {
   }
 }
 
-const EXPLICIT_MOCK = Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]ccmock=/.test(location.search);
+const MOCK_OK = __DEV__ || process.env.EXPO_PUBLIC_CC_MOCK === '1';
+/** `?ccmock=…` forces the mock on web, but only in a dev build or with EXPO_PUBLIC_CC_MOCK=1, never on 8445. */
+const EXPLICIT_MOCK = MOCK_OK && Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]ccmock=/.test(location.search);
 /**
  * The local mock may stand in for missing cc routes only in dev builds, with `?ccmock=…`, or with
  * EXPO_PUBLIC_CC_MOCK=1. Production (8445, the desktop) never shows fake Claude Code replies: without
  * the routes Claude Code is unavailable and the chat stays on DeepSeek.
  */
-const MOCK_ALLOWED = EXPLICIT_MOCK || __DEV__ || process.env.EXPO_PUBLIC_CC_MOCK === '1';
+const MOCK_ALLOWED = MOCK_OK;
 let mock = EXPLICIT_MOCK;
 
 /** Whether the server has the cc routes: null until probed (cc.status), then true or false. */

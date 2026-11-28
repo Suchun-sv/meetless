@@ -17,6 +17,8 @@ export interface InboxItem {
   duplicateOf?: string | null;
   conflict?: { needId: string; field: 'due'; old: IsoDate; new: IsoDate } | null;
   revNeedId?: string | null;
+  /** The suggested project has no deadline on this item's date: committing with `createRound` makes one (S, 2026-11-28). */
+  createsRound?: { due: IsoDate; title: string } | null;
 }
 
 export interface RoutingCandidate {
@@ -44,7 +46,9 @@ export interface ReviewMaterial {
   kind: string;
   title: string;
   source: string;
-  at: string;
+  /** When it came in (S: `addedAt`; `at` in A3's first draft). */
+  addedAt?: string;
+  at?: string;
   status: 'analyzing' | 'ready' | 'committed' | 'empty' | 'failed';
   pages?: number | null;
   summary?: string | null;
@@ -70,6 +74,8 @@ export interface CommitBody {
     due?: IsoDate | null;
     mergeInto?: string;
     conflict?: 'keep' | 'apply';
+    /** Make the item's `createsRound` deadline; otherwise it goes under the current one. */
+    createRound?: boolean;
   }[];
   newProject?: { name: string; firstRound: { title: string; due: IsoDate } | null; template: string | null };
 }
@@ -80,6 +86,8 @@ export interface CommitResult {
   created: number;
   merged: number;
   changedDue: number;
+  /** Existing needs revised by the material (S, 2026-11-28). */
+  revised?: number;
   undoUntil: string;
 }
 
