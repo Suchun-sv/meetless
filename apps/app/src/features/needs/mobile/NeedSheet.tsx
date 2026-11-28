@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useIsFocused } from 'expo-router';
 import { Avatar, Button, Sheet, Text, TextField } from '@/components/ui';
 import { useApp, useGo } from '@/state';
 import { colors, radius, space, tones } from '@/theme';
@@ -17,6 +18,7 @@ import { SHARE_IDLE, shareClick, shareView, type ShareState } from '../model/sha
 import { DeadlineEdit, OwnerEdit, ParentEdit, ReviseForm, useBusy } from '../NeedDetail';
 import { HandoffBlock } from '../../handoff/HandoffBlock';
 import { themeTone } from '../ui/kit';
+import { NeedTrailSheet } from '../../lineage/NeedTrail';
 
 const EXT_MENU: NeedStatus[] = ['todo', 'doing', 'partial', 'met', 'moved', 'dropped'];
 const HYP_MENU: NeedStatus[] = ['testing', 'held', 'refuted', 'parked'];
@@ -25,6 +27,9 @@ export function NeedSheet({ projectId, needId, onClose }: { projectId: Id; needI
   const { t, live, me, today, fmtDay, notify, submit, errorText } = useApp();
   const go = useGo();
   const b = useBusy(needId);
+  // On native the Stack keeps this screen mounted under the next one: the sheet shows only while it is focused.
+  const focused = useIsFocused();
+  const [trail, setTrail] = useState(false);
   const vm = useMemo(() => drawerVM(live, me, projectId, needId, today), [live, me, projectId, needId, today]);
   const [menu, setMenu] = useState(false);
   const [pick, setPick] = useState<'deadline' | 'owner' | 'parent' | null>(null);
@@ -38,11 +43,12 @@ export function NeedSheet({ projectId, needId, onClose }: { projectId: Id; needI
     setRevising(false);
     setReason(null);
     setShare(SHARE_IDLE);
+    setTrail(false);
   }, [needId]);
 
   if (!vm) {
     return (
-      <Sheet open onClose={onClose} title={t('dr.missing')}>
+      <Sheet open={focused} onClose={onClose} title={t('dr.missing')}>
         <View />
       </Sheet>
     );
@@ -97,9 +103,10 @@ export function NeedSheet({ projectId, needId, onClose }: { projectId: Id; needI
       </View>
     </View>
   );
+  if (trail) return <NeedTrailSheet projectId={projectId} needId={n.id} open={focused} onClose={onClose} onBack={() => setTrail(false)} />;
   return (
     <Sheet
-      open
+      open={focused}
       onClose={onClose}
       footer={footer}
       header={
@@ -204,7 +211,7 @@ export function NeedSheet({ projectId, needId, onClose }: { projectId: Id; needI
           </View>
         ) : null}
 
-        <Pressable testID="m-trace" accessibilityRole="link" onPress={() => go({ view: 'lineage', projectId, needId: n.id })} style={styles.trace}>
+        <Pressable testID="m-trace" accessibilityRole="link" onPress={() => setTrail(true)} style={styles.trace}>
           <Text size="md" style={{ flex: 1 }}>
             {t('need.trace')}
           </Text>
@@ -242,13 +249,27 @@ export function NeedSheet({ projectId, needId, onClose }: { projectId: Id; needI
           <HandoffBlock key={h.id} need={n} h={h} />
         ))}
 
-        <View style={styles.more}>
-          {revising ? (
-            <ReviseForm n={n} b={b} onDone={() => setRevising(false)} />
-          ) : (
-            <Button size="sm" variant="ghost" label={t('nn.revise')} onPress={() => setRevising(true)} />
-          )}
-          <Button size="sm" variant="ghost" label={t('need.parent')} onPress={() => setPick(pick === 'parent' ? null : 'parent')} />
+        <View style={styles.rows}>
+          <Pressable testID="m-revise" accessibilityRole="button" accessibilityState={{ expanded: revising }} onPress={() => setRevising((r) => !r)} style={styles.trace}>
+            <Text size="md" style={{ flex: 1 }}>
+              {t('nn.revise')}
+            </Text>
+            <Text size="lg" color="textTertiary" tight>
+              {revising ? '⌄' : '›'}
+            </Text>
+          </Pressable>
+          {revising ? <ReviseForm n={n} b={b} onDone={() => setRevising(false)} /> : null}
+          <Pressable testID="m-parent" accessibilityRole="button" accessibilityState={{ expanded: pick === 'parent' }} onPress={() => setPick(pick === 'parent' ? null : 'parent')} style={styles.trace}>
+            <Text size="md" style={{ flex: 1 }}>
+              {t('need.parent')}
+            </Text>
+            <Text size="md" color="textTertiary" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {vm.parent ? vm.parent.code : t('dr.none')}
+            </Text>
+            <Text size="lg" color="textTertiary" tight>
+              {pick === 'parent' ? '⌄' : '›'}
+            </Text>
+          </Pressable>
         </View>
         {pick === 'parent' ? <ParentEdit vm={vm} b={b} /> : null}
       </View>
@@ -270,8 +291,8 @@ const styles = StyleSheet.create({
   k: { width: 88 },
   v: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space[2], minWidth: 0 },
   quote: { backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, gap: 6 },
-  trace: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: HAIR, borderBottomColor: colors.borderStrong },
+  trace: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: 10, borderBottomWidth: HAIR, borderBottomColor: colors.borderStrong },
   acts: { flexDirection: 'row', gap: space[3], justifyContent: 'flex-end' },
   act: { flex: 1, minHeight: 44, borderRadius: 12 },
-  more: { flexDirection: 'row', gap: space[2], flexWrap: 'wrap' },
+  rows: { borderTopWidth: HAIR, borderTopColor: colors.borderStrong },
 });

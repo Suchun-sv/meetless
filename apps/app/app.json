@@ -3,7 +3,7 @@
     "name": "Meetless",
     "slug": "meetless",
     "scheme": "meetless",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "orientation": "default",
     "userInterfaceStyle": "light",
     "backgroundColor": "#FBFBFA",

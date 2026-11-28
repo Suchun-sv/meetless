@@ -22,7 +22,9 @@ function mapsUnder(dir) {
 }
 
 /** The package root holding a bundled source file, or null for first-party code. */
-function pkgRoot(file) {
+function pkgRoot(path) {
+  // Forward slashes on Windows too, where join() gives backslashes.
+  const file = path.replaceAll('\\', '/');
   const i = file.lastIndexOf('/node_modules/');
   if (i < 0) return null;
   const rest = file.slice(i + '/node_modules/'.length).split('/');

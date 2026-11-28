@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useGlobalSearchParams, usePathname } from 'expo-router';
 import type { Id } from '@meetless/core';
 import { Sheet, Text } from '@/components/ui';
 import { useApp } from '@/state';
@@ -19,7 +20,12 @@ const MAX_SUGGESTIONS = 3;
  */
 export function AskBar({ scope, onDash }: { scope: 'home' | Id; onDash: boolean }) {
   const { t } = useApp();
-  const [open, setOpen] = useState(false);
+  const { ask } = useGlobalSearchParams<{ ask?: string }>();
+  const path = usePathname();
+  // `?ask=1` opens the sheet on arrival (links and the iOS screenshot tour); any navigation closes it,
+  // so a Modal never stays over the next screen.
+  const [open, setOpen] = useState(ask === '1');
+  useEffect(() => setOpen(ask === '1'), [path, ask]);
   const ph = scope === 'home' ? t('ch.phHome') : t('dock.askPh');
   return (
     <View style={styles.barWrap}>

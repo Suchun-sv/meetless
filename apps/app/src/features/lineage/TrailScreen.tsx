@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import type { Id } from '@meetless/core';
 import { Text } from '@/components/ui';
 import { routePath, useApp, useProject, useProjectId } from '@/state';
@@ -117,6 +117,8 @@ export function NeedTrailScreen() {
   const router = useRouter();
   const { needId } = useLocalSearchParams<{ needId?: string }>();
   const [open, setOpen] = useState(true);
+  // The Stack keeps this screen mounted under the next one; its Modal sheet must not stay on top.
+  const focused = useIsFocused();
   if (!phone) return <LineageScreen />;
   if (!project) return <Text color="textSecondary">{t('xp.notFound')}</Text>;
   const id = String(needId ?? '');
@@ -128,7 +130,7 @@ export function NeedTrailScreen() {
   return (
     <View style={styles.root}>
       <TrailList projectId={projectId} />
-      <NeedTrailSheet projectId={projectId} needId={id} open={open} onClose={close} onBack={() => router.push(routePath({ view: 'board', projectId, needId: id }) as Href)} />
+      <NeedTrailSheet projectId={projectId} needId={id} open={open && focused} onClose={close} onBack={() => router.push(routePath({ view: 'board', projectId, needId: id }) as Href)} />
     </View>
   );
 }

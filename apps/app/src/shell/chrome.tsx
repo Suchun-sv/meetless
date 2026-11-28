@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useFocusEffect } from 'expo-router';
 import type { IconName } from '@/components/ui/Icon';
 
 /**
@@ -16,18 +17,22 @@ export interface HeaderAction {
 
 interface Chrome {
   actions: HeaderAction[];
-  setActions: (a: HeaderAction[]) => void;
+  /** `owner` scopes the actions to one screen: a later screen's set is never cleared by an earlier one's cleanup. */
+  setActions: (owner: number, a: HeaderAction[]) => void;
+  clearActions: (owner: number) => void;
   bottomInset: number;
 }
 
 const Ctx = createContext<Chrome | null>(null);
 
 export function ChromeProvider({ children }: { children: ReactNode }) {
-  const [actions, setActions] = useState<HeaderAction[]>([]);
+  const [state, setState] = useState<{ owner: number; actions: HeaderAction[] }>({ owner: 0, actions: [] });
+  const actions = state.actions;
   const value = useMemo<Chrome>(
     () => ({
       actions,
-      setActions,
+      setActions: (owner, a) => setState({ owner, actions: a }),
+      clearActions: (owner) => setState((s) => (s.owner === owner ? { owner: 0, actions: [] } : s)),
       // The ask bar and the tab bar sit in the layout flow below the content, so nothing is covered.
       bottomInset: 0,
     }),
@@ -42,15 +47,27 @@ function useChrome(): Chrome {
   return v;
 }
 
-/** A page's actions in the project header, left of ⋯ (e.g. 产物's +). Cleared on unmount. */
+let nextOwner = 1;
+
+/**
+ * A page's actions in the phone header, left of ⋯ (产物's +, 待确认's 全部接受). Shown only while that
+ * screen is focused: on native the stack keeps blurred screens mounted, so mount/unmount is not enough.
+ */
 export function useHeaderActions(actions: HeaderAction[]): void {
-  const { setActions } = useChrome();
+  const { setActions, clearActions } = useChrome();
+  const owner = useRef(0);
+  if (owner.current === 0) owner.current = nextOwner++;
+  const latest = useRef(actions);
+  latest.current = actions;
   const key = actions.map((a) => `${a.icon ?? ''}:${a.text ?? ''}:${a.label}`).join('|');
-  useEffect(() => {
-    setActions(actions);
-    return () => setActions([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  useFocusEffect(
+    useCallback(() => {
+      const id = owner.current;
+      setActions(id, latest.current);
+      return () => clearActions(id);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key]),
+  );
 }
 
 export function useHeaderActionList(): HeaderAction[] {

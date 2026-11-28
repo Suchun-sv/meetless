@@ -4,10 +4,12 @@
  */
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, NeedRow, Text } from '@/components/ui';
+import { Button, NeedRow, statusColor, Text } from '@/components/ui';
+import { statusCommand } from '../model/edit';
+import { runCmds } from '../../confirm/model/run';
 import { useApp, useGo } from '@/state';
 import { colors, space } from '@/theme';
-import type { Id, Need } from '@meetless/core';
+import type { Id, Need, NeedStatus } from '@meetless/core';
 import { mobileNeedsVM, type DeadlineGroup, type NeedRow as Row, type NextReason } from '../model/mobile';
 
 /** Bottom room for the ask bar and the tab bar (mobile-v1 decision 3). */
@@ -26,8 +28,60 @@ function reasonText(t: ReturnType<typeof useApp>['t'], r: NextReason, name: (id:
   }
 }
 
-/** A need row: the shell's NeedRow (check circle with undo, code, title, coloured status), nested one level for a child. */
+const HYP_MENU: NeedStatus[] = ['testing', 'held', 'refuted'];
+
+/** A hypothesis row (mobile-v1 decision 4): no check circle; its status opens a 验证中 / 已验证 / 已否定 menu. */
+function HypLine({ row, onOpen, divider }: { row: Row; onOpen: (n: Need) => void; divider?: boolean }) {
+  const { t, submit, notify, errorText } = useApp();
+  const n = row.need;
+  const [menu, setMenu] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const set = async (st: NeedStatus) => {
+    setMenu(false);
+    if (st === n.status) return;
+    setBusy(true);
+    try {
+      await runCmds([statusCommand(n, st)], submit);
+    } catch {
+      notify('error', errorText('NETWORK'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const done = n.status === 'held';
+  return (
+    <View style={[styles.rowPad, { paddingLeft: space[5] + (row.nested ? 32 : 0) }]}>
+      <Pressable testID="m-need" accessibilityRole="button" onPress={() => onOpen(n)} style={({ pressed }) => [styles.hrow, divider && styles.hdiv, pressed && { opacity: 0.6 }]}>
+        <View style={styles.noCheck} />
+        <Text mono size="sm" color="textTertiary" tight style={styles.hcode}>
+          {n.code}
+        </Text>
+        <Text size="md" color={done ? 'textTertiary' : 'text'} numberOfLines={1} style={{ flex: 1 }} tight>
+          {n.title}
+        </Text>
+        <Pressable testID="m-hyp-status" accessibilityRole="button" disabled={busy} hitSlop={10} onPress={() => setMenu((m) => !m)}>
+          <Text size="sm" tight color={statusColor(n.status)}>{`${t(`st.${n.status}`)} ⌄`}</Text>
+        </Pressable>
+      </Pressable>
+      {menu ? (
+        <View testID="m-hyp-menu" style={styles.menu}>
+          {HYP_MENU.map((st) => (
+            <Pressable key={st} accessibilityRole="menuitem" onPress={() => set(st)} style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
+              <Text size="md" style={{ flex: 1 }}>
+                {t(`st.${st}`)}
+              </Text>
+              {st === n.status ? <Text size="md">✓</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** A need row: an external need is the shell's NeedRow (check circle with undo); a hypothesis is `HypLine`. */
 function NeedLine({ row, onOpen, divider }: { row: Row; onOpen: (n: Need) => void; divider?: boolean }) {
+  if (row.need.kind === 'hyp') return <HypLine row={row} onOpen={onOpen} divider={divider} />;
   return (
     <View style={styles.rowPad}>
       <NeedRow testID="m-need" needId={row.need.id} depth={row.nested ? 1 : 0} divider={divider} onPress={() => onOpen(row.need)} />
@@ -171,6 +225,12 @@ const styles = StyleSheet.create({
   blk: { marginTop: space[5] },
   secH: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space[5], marginBottom: space[1] },
   rowPad: { paddingHorizontal: space[5] },
+  hrow: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 44, paddingVertical: 10 },
+  hdiv: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong },
+  noCheck: { width: 22 - space[1] },
+  hcode: { minWidth: 26 },
+  menu: { marginLeft: 22 + space[2], borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.textInverse, overflow: 'hidden', marginBottom: space[2] },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[4], paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   pad: { paddingHorizontal: space[5], paddingVertical: space[2] },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: 10, paddingLeft: space[5], paddingRight: space[5] },
   hair: { borderTopWidth: HAIR, borderTopColor: colors.borderStrong, marginLeft: space[5], paddingLeft: 0 },
